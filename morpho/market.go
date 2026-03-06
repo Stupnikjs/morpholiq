@@ -1,4 +1,4 @@
-package main
+package morpho
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 var (
 	MorphoBlueAddr = w3.A("0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb") // Morpho Blue mainnet
 
+	// La (pool)
 	// market(id) → (totalSupplyAssets, totalSupplyShares, totalBorrowAssets, totalBorrowShares, lastUpdate, fee)
 	MarketFunc = w3.MustNewFunc(
 		"market(bytes32)",
