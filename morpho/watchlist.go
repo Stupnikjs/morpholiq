@@ -125,3 +125,17 @@ func SyncBorrowersFromLogs(
 	fmt.Printf("Sync terminé : %d borrowers actifs\n", len(watchlist.Snapshot()))
 	return nil
 }
+
+
+func fetchBorrowers(marketID string, chainID int) ([]common.Address, error) {
+    query := fmt.Sprintf(`{
+        "query": "{ marketPositions(first: 1000, where: { marketUniqueKey_in: [\"%s\"], chainId_in: [%d] }) { items { user { address } state { borrowShares } } } }"
+    }`, marketID, chainID)
+
+    resp, err := http.Post(
+        "https://api.morpho.org/graphql",
+        "application/json",
+        strings.NewReader(query),
+    )
+    // parser la réponse → extraire les adresses
+}
