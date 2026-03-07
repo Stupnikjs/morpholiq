@@ -86,7 +86,7 @@ func (b *BorrowerEngine) LoadBorrowerCache(marketID [32]byte, chainID int) error
 		}
 
 		cache[common.HexToAddress(item.User.Address)] = BorrowerStats{
-			Shares:           parseBigInt(item.State.BorrowShares),
+			Shares:           ParseBigInt(item.State.BorrowShares),
 			BorrowAssets:     parseBigInt(item.State.BorrowAssets),
 			CollateralAssets: parseBigInt(item.State.Collateral),
 		}
