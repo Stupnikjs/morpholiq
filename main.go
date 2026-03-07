@@ -55,8 +55,12 @@ func main() {
 
 	bEngine := morpho.NewBorrowerEngine(20)
 	err = bEngine.LoadBorrowerCache(TestMarketID, 1)
+	err = bEngine.LoadBorrowerCache(BaseWETHUSDC, 8453)
+
 	if err != nil {
 		fmt.Println(err)
 	}
-	fmt.Println(bEngine.Get(TestMarketID))
+	for _, v := range bEngine.Get(BaseWETHUSDC) {
+		v.Print()
+	}
 }

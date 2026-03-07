@@ -13,6 +13,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+// health factor = (collateral × collateralPrice × LLTV) / (shares × sharePrice × borrowPrice)
+// // Morpho SDK / BlueHelper
+// assets = borrowShares * totalBorrowAssets / totalBorrowShares
+
 type BorrowerStats struct {
 	Shares           *big.Int // borrow shares
 	BorrowAssets     *big.Int // valeur réelle empruntée
@@ -80,17 +84,11 @@ func (b *BorrowerEngine) LoadBorrowerCache(marketID [32]byte, chainID int) error
 		if item.State.BorrowShares == "0" || item.State.BorrowShares == "" {
 			continue
 		}
-		shares, _ := item.State.BorrowShares.Int64()
-		bigShares := big.NewInt(shares)
-		borrowAsset, _ := item.State.BorrowAssets.Int64()
-		bigBorrowAsset := big.NewInt(borrowAsset)
-		collateral, _ := item.State.Collateral.Int64()
-		bigCollateral := big.NewInt(collateral)
 
 		cache[common.HexToAddress(item.User.Address)] = BorrowerStats{
-			Shares:           bigShares,
-			BorrowAssets:     bigBorrowAsset,
-			CollateralAssets: bigCollateral,
+			Shares:           parseBigInt(item.State.BorrowShares),
+			BorrowAssets:     parseBigInt(item.State.BorrowAssets),
+			CollateralAssets: parseBigInt(item.State.Collateral),
 		}
 
 	}
@@ -126,4 +124,12 @@ func (e *BorrowerEngine) Update(marketID [32]byte, cache BorrowerCache) {
 		}
 		// Si un autre writer a swappé entre temps → on recommence
 	}
+}
+
+func (s *BorrowerStats) Print() {
+	fmt.Println("Borrower stat")
+	fmt.Printf("borrow assets : %d", s.BorrowAssets.Int64())
+	fmt.Printf("borrow shares : %d", s.Shares.Int64())
+	fmt.Printf("collateral : %d", s.CollateralAssets.Int64())
+
 }
