@@ -125,3 +125,8 @@ func SyncBorrowersFromLogs(
 	fmt.Printf("Sync terminé : %d borrowers actifs\n", len(watchlist.Snapshot()))
 	return nil
 }
+
+// IsLiquidatable returns true if HF < 1.0
+func IsLiquidatable(hf *big.Float) bool {
+	return hf.Cmp(new(big.Float).SetFloat64(1.0)) < 0
+}

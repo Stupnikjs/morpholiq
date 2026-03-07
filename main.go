@@ -61,6 +61,6 @@ func main() {
 		fmt.Println(err)
 	}
 	for _, v := range bEngine.Get(BaseWETHUSDC) {
-		v.Print()
+		fmt.Println(v.HealthFactor())
 	}
 }

@@ -18,10 +18,12 @@ import (
 // assets = borrowShares * totalBorrowAssets / totalBorrowShares
 
 type BorrowerStats struct {
-	Shares           *big.Int // borrow shares
-	BorrowAssets     *big.Int // valeur réelle empruntée
-	CollateralAssets *big.Int // collateral déposé
-	SeizedAssets     *big.Int // (optionnel) pour simuler la liquidation
+	Shares              *big.Int // borrow shares
+	BorrowAssets        *big.Int // valeur réelle empruntée
+	BorrowAssetsUsd     *big.Float
+	CollateralAssets    *big.Int   // collateral déposé
+	CollateralAssetsUsd *big.Float // collateral déposé
+	LLTV                *big.Int   // mettre ailleur peut etre
 }
 
 type BorrowerCache map[common.Address]BorrowerStats
@@ -44,7 +46,15 @@ func (b *BorrowerEngine) LoadBorrowerCache(marketID [32]byte, chainID int) error
 	marketIDstr := "0x" + hex.EncodeToString(marketID[:])
 	cache := make(BorrowerCache, 1000)
 	query := fmt.Sprintf(`{
-        "query": "{ marketPositions(first: 1000, where: { marketUniqueKey_in: [\"%s\"], chainId_in: [%d] }) { items { user { address } state { borrowShares borrowAssets collateral } } } }"
+        "query": "{ marketPositions(first: 1000, where: { marketUniqueKey_in: [\"%s\"], chainId_in: [%d] }) 
+		{ items 
+		    { user 
+			     { address } 
+				      state { borrowShares borrowAssets borrowAssetsUsd collateral collateralUsd } 
+					   market { lltv }
+					  } 
+			     } 
+		    }"
     }`, marketIDstr, chainID)
 
 	resp, err := http.Post(
@@ -66,10 +76,15 @@ func (b *BorrowerEngine) LoadBorrowerCache(marketID [32]byte, chainID int) error
 						Address string `json:"address"`
 					} `json:"user"`
 					State struct {
-						BorrowShares json.Number `json:"borrowShares"`
-						BorrowAssets json.Number `json:"borrowAssets"`
-						Collateral   json.Number `json:"collateral"`
+						BorrowShares    json.Number `json:"borrowShares"`
+						BorrowAssets    json.Number `json:"borrowAssets"`
+						BorrowAssetsUsd json.Number `json:"borrowAssetsUsd"`
+						Collateral      json.Number `json:"collateral"`
+						CollateralUsd   json.Number `json:"collateralUsd"`
 					} `json:"state"`
+					Market struct {
+						LLTV json.Number `json:"lltv"`
+					}
 				} `json:"items"`
 			} `json:"marketPositions"`
 		} `json:"data"`
@@ -86,9 +101,12 @@ func (b *BorrowerEngine) LoadBorrowerCache(marketID [32]byte, chainID int) error
 		}
 
 		cache[common.HexToAddress(item.User.Address)] = BorrowerStats{
-			Shares:           ParseBigInt(item.State.BorrowShares),
-			BorrowAssets:     parseBigInt(item.State.BorrowAssets),
-			CollateralAssets: parseBigInt(item.State.Collateral),
+			Shares:              ParseBigInt(item.State.BorrowShares.String()),
+			BorrowAssets:        ParseBigInt(item.State.BorrowAssets.String()),
+			BorrowAssetsUsd:     ParseBigFloat(item.State.CollateralUsd.String()),
+			CollateralAssets:    ParseBigInt(item.State.Collateral.String()),
+			CollateralAssetsUsd: ParseBigFloat(item.State.CollateralUsd.String()),
+			LLTV:                ParseBigInt(item.Market.LLTV.String()),
 		}
 
 	}
@@ -125,11 +143,37 @@ func (e *BorrowerEngine) Update(marketID [32]byte, cache BorrowerCache) {
 		// Si un autre writer a swappé entre temps → on recommence
 	}
 }
+func (s *BorrowerStats) HealthFactor() *big.Float {
+	if s.BorrowAssets == nil || s.BorrowAssets.Sign() == 0 {
+		return nil
+	}
+	e18 := new(big.Float).SetPrec(128).SetInt(
+		new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil),
+	)
+	lltv := new(big.Float).Quo(
+		new(big.Float).SetInt(s.LLTV),
+		e18, // normalize 1e18 → [0,1]
+	)
+
+	// (collateral × collateralPrice × lltv)
+	num := new(big.Float).SetInt(s.CollateralAssets)
+	num.Mul(num, lltv)
+
+	// (borrow × borrowPrice)
+	den := new(big.Float).SetInt(s.BorrowAssets)
+	den.Mul(den, s.BorrowAssetsUsd)
+
+	return new(big.Float).Quo(num, den)
+}
 
 func (s *BorrowerStats) Print() {
-	fmt.Println("Borrower stat")
-	fmt.Printf("borrow assets : %d", s.BorrowAssets.Int64())
-	fmt.Printf("borrow shares : %d", s.Shares.Int64())
-	fmt.Printf("collateral : %d", s.CollateralAssets.Int64())
+	fmt.Println("Borrower stat ")
+	fmt.Printf("borrow assets: %d \n", s.BorrowAssets.Int64())
+	f, _ := s.BorrowAssetsUsd.Float64()
+	fmt.Printf("borrow assetsUSD: %f \n", f)
+	fmt.Printf("borrow shares: %d \n", s.Shares.Int64())
+	fmt.Printf("collateral: %d \n", s.CollateralAssets.Int64())
+	f, _ = s.CollateralAssetsUsd.Float64()
+	fmt.Printf("collateralprice: %f \n", f)
 
 }
