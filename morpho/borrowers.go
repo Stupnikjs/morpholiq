@@ -14,7 +14,10 @@ import (
 )
 
 type BorrowerStats struct {
-	Shares *big.Int
+	Shares           *big.Int // borrow shares
+	BorrowAssets     *big.Int // valeur réelle empruntée
+	CollateralAssets *big.Int // collateral déposé
+	SeizedAssets     *big.Int // (optionnel) pour simuler la liquidation
 }
 
 type BorrowerCache map[common.Address]BorrowerStats
@@ -35,9 +38,9 @@ func NewBorrowerEngine(size uint) *BorrowerEngine {
 
 func (b *BorrowerEngine) LoadBorrowerCache(marketID [32]byte, chainID int) error {
 	marketIDstr := "0x" + hex.EncodeToString(marketID[:])
-	cache := make(map[common.Address]BorrowerStats, 1000)
+	cache := make(BorrowerCache, 1000)
 	query := fmt.Sprintf(`{
-        "query": "{ marketPositions(first: 1000, where: { marketUniqueKey_in: [\"%s\"], chainId_in: [%d] }) { items { user { address } state { borrowShares } } } }"
+        "query": "{ marketPositions(first: 1000, where: { marketUniqueKey_in: [\"%s\"], chainId_in: [%d] }) { items { user { address } state { borrowShares borrowAssets collateral } } } }"
     }`, marketIDstr, chainID)
 
 	resp, err := http.Post(
@@ -60,6 +63,8 @@ func (b *BorrowerEngine) LoadBorrowerCache(marketID [32]byte, chainID int) error
 					} `json:"user"`
 					State struct {
 						BorrowShares json.Number `json:"borrowShares"`
+						BorrowAssets json.Number `json:"borrowAssets"`
+						Collateral   json.Number `json:"collateral"`
 					} `json:"state"`
 				} `json:"items"`
 			} `json:"marketPositions"`
@@ -77,8 +82,15 @@ func (b *BorrowerEngine) LoadBorrowerCache(marketID [32]byte, chainID int) error
 		}
 		shares, _ := item.State.BorrowShares.Int64()
 		bigShares := big.NewInt(shares)
+		borrowAsset, _ := item.State.BorrowAssets.Int64()
+		bigBorrowAsset := big.NewInt(borrowAsset)
+		collateral, _ := item.State.Collateral.Int64()
+		bigCollateral := big.NewInt(collateral)
+
 		cache[common.HexToAddress(item.User.Address)] = BorrowerStats{
-			Shares: bigShares,
+			Shares:           bigShares,
+			BorrowAssets:     bigBorrowAsset,
+			CollateralAssets: bigCollateral,
 		}
 
 	}
