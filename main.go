@@ -39,20 +39,24 @@ func main() {
 	}
 
 	// 2. Construire la watchlist
-	watchList := morpho.NewBorrowerWatchlist(TestMarketID)
 
 	// 3. Sync depuis le déploiement de Morpho Blue sur Base
 	// Morpho Blue sur Base mainnet
+	/*
+		if err := morpho.SyncBorrowersFromLogs(
+			client,
+			watchList,
+			latestBlock.Uint64()-50000, // fromBlock : début de l'historique
+			latestBlock.Uint64(),       // toBlock   : maintenant
+		); err != nil {
+			panic(err)
+		}
+	*/
 
-	if err := morpho.SyncBorrowersFromLogs(
-		client,
-		watchList,
-		latestBlock.Uint64()-50000, // fromBlock : début de l'historique
-		latestBlock.Uint64(),       // toBlock   : maintenant
-	); err != nil {
-		panic(err)
+	bEngine := morpho.NewBorrowerEngine(20)
+	err = bEngine.LoadBorrowerCache(TestMarketID, 1)
+	if err != nil {
+		fmt.Println(err)
 	}
-
-	fmt.Printf("Watchlist prête : %d borrowers\n", len(watchList.Snapshot()))
-
+	fmt.Println(bEngine.Get(TestMarketID))
 }
