@@ -38,14 +38,31 @@ func main() {
 		panic(err)
 	}
 
-	bEngine := morpho.NewBorrowerEngine(20)
-	err = bEngine.LoadBorrowerCache(TestMarketID, 1)
-	err = bEngine.LoadBorrowerCache(BaseWETHUSDC, 8453)
+	var params = []morpho.MorphoMarketParams{
+		// wstUSD / USDC
+		{
+			ID:                      TestMarketID,
+			ChainID:                 1, // mainnet
+			LoanToken:               common.HexToAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
+			CollateralToken:         common.HexToAddress("0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0"),
+			Oracle:                  common.HexToAddress("0x48F7E36EB6B826B2dF4B2E630B62Cd25e89E40e2"),
+			IRM:                     common.HexToAddress("0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC"),
+			LLTV:                    big.NewInt(860000000000000000),
+			LoanTokenDecimals:       6,
+			CollateralTokenDecimals: 18,
+		},
+	}
+
+	bEngine := morpho.NewBorrowerEngine(params)
+	err = bEngine.LoadBorrowerCache(params[0])
 
 	if err != nil {
 		fmt.Println(err)
 	}
-	for _, v := range bEngine.Get(TestMarketID) {
-		v.Print()
+
+	liquidable := bEngine.GetLiquidableByMarketId(params[0])
+
+	for _, l := range liquidable {
+		fmt.Println(l.HealthFactor(params[0].CollateralTokenDecimals, params[0].LoanTokenDecimals))
 	}
 }

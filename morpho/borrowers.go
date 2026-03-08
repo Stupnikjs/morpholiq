@@ -24,8 +24,7 @@ type BorrowerStats struct {
 	CollateralAssets    *big.Int   // collateral déposé
 	CollateralAssetsUsd *big.Float // collateral déposé
 	LLTV                *big.Int   // mettre ailleur peut etre
-	CollateralsDecimals int64
-	BorrowDecimals      int64
+
 }
 
 type BorrowerCache map[common.Address]BorrowerStats
@@ -35,17 +34,17 @@ type BorrowerEngine struct {
 	snapshot atomic.Pointer[map[[32]byte]BorrowerCache]
 }
 
-func NewBorrowerEngine(size uint) *BorrowerEngine {
+func NewBorrowerEngine(params []MorphoMarketParams) *BorrowerEngine {
 	engine := &BorrowerEngine{}
 
-	initialMap := make(map[[32]byte]BorrowerCache, size)
+	initialMap := make(map[[32]byte]BorrowerCache, len(params))
 	engine.snapshot.Store(&initialMap)
 
 	return engine
 }
 
-func (b *BorrowerEngine) LoadBorrowerCache(marketID [32]byte, chainID int) error {
-	marketIDstr := "0x" + hex.EncodeToString(marketID[:])
+func (b *BorrowerEngine) LoadBorrowerCache(param MorphoMarketParams) error {
+	marketIDstr := "0x" + hex.EncodeToString(param.ID[:])
 	cache := make(BorrowerCache, 1000)
 	query := fmt.Sprintf(`{
         "query": "{ marketPositions(first: 1000, where: { marketUniqueKey_in: [\"%s\"], chainId_in: [%d] }) 
@@ -57,7 +56,7 @@ func (b *BorrowerEngine) LoadBorrowerCache(marketID [32]byte, chainID int) error
 					  } 
 			     } 
 		    }"
-    }`, marketIDstr, chainID)
+    }`, marketIDstr, uint(param.ChainID))
 
 	resp, err := http.Post(
 		"https://api.morpho.org/graphql",
@@ -115,7 +114,7 @@ func (b *BorrowerEngine) LoadBorrowerCache(marketID [32]byte, chainID int) error
 	old := b.snapshot.Load()
 	newMap := make(map[[32]byte]BorrowerCache, len(*old)+1)
 	maps.Copy(newMap, *old)
-	newMap[marketID] = cache
+	newMap[param.ID] = cache
 	swapped := b.snapshot.CompareAndSwap(old, &newMap)
 	if swapped {
 		return nil
@@ -145,7 +144,7 @@ func (e *BorrowerEngine) Update(marketID [32]byte, cache BorrowerCache) {
 		// Si un autre writer a swappé entre temps → on recommence
 	}
 }
-func (s *BorrowerStats) HealthFactor() *big.Float {
+func (s *BorrowerStats) HealthFactor(colDecimals, borrowDecimals uint16) *big.Float {
 	if s.BorrowAssets == nil || s.BorrowAssets.Sign() == 0 ||
 		s.BorrowAssetsUsd == nil || s.BorrowAssetsUsd.Sign() == 0 {
 		return nil
@@ -160,10 +159,10 @@ func (s *BorrowerStats) HealthFactor() *big.Float {
 	)
 
 	collateralDec := new(big.Float).SetInt(
-		new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(s.CollateralsDecimals)), nil),
+		new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(colDecimals)), nil),
 	)
 	borrowDec := new(big.Float).SetInt(
-		new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(s.BorrowDecimals)), nil),
+		new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(borrowDecimals)), nil),
 	)
 
 	num := new(big.Float).SetPrec(128).SetInt(s.CollateralAssets)
@@ -177,9 +176,21 @@ func (s *BorrowerStats) HealthFactor() *big.Float {
 
 	return new(big.Float).Quo(num, den)
 }
-func (s *BorrowerStats) Print() {
-	s.BorrowDecimals = 6
-	s.CollateralsDecimals = 18
-	fmt.Println(s.HealthFactor())
 
+func (e *BorrowerEngine) GetLiquidableByMarketId(param MorphoMarketParams) []BorrowerStats {
+
+	cache := e.Get(param.ID)
+	liquidable := make([]BorrowerStats, 0, len(cache))
+	one := new(big.Float).SetFloat64(1.0)
+	for _, v := range cache {
+		hf := v.HealthFactor(param.CollateralTokenDecimals, param.LoanTokenDecimals)
+
+		if hf == nil {
+			continue
+		}
+		if hf.Cmp(one) < 0 {
+			liquidable = append(liquidable, v)
+		}
+	}
+	return liquidable
 }
