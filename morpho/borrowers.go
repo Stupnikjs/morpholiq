@@ -24,6 +24,8 @@ type BorrowerStats struct {
 	CollateralAssets    *big.Int   // collateral déposé
 	CollateralAssetsUsd *big.Float // collateral déposé
 	LLTV                *big.Int   // mettre ailleur peut etre
+	CollateralsDecimals int64
+	BorrowDecimals      int64
 }
 
 type BorrowerCache map[common.Address]BorrowerStats
@@ -103,7 +105,7 @@ func (b *BorrowerEngine) LoadBorrowerCache(marketID [32]byte, chainID int) error
 		cache[common.HexToAddress(item.User.Address)] = BorrowerStats{
 			Shares:              ParseBigInt(item.State.BorrowShares.String()),
 			BorrowAssets:        ParseBigInt(item.State.BorrowAssets.String()),
-			BorrowAssetsUsd:     ParseBigFloat(item.State.CollateralUsd.String()),
+			BorrowAssetsUsd:     ParseBigFloat(item.State.BorrowAssetsUsd.String()),
 			CollateralAssets:    ParseBigInt(item.State.Collateral.String()),
 			CollateralAssetsUsd: ParseBigFloat(item.State.CollateralUsd.String()),
 			LLTV:                ParseBigInt(item.Market.LLTV.String()),
@@ -144,36 +146,40 @@ func (e *BorrowerEngine) Update(marketID [32]byte, cache BorrowerCache) {
 	}
 }
 func (s *BorrowerStats) HealthFactor() *big.Float {
-	if s.BorrowAssets == nil || s.BorrowAssets.Sign() == 0 {
+	if s.BorrowAssets == nil || s.BorrowAssets.Sign() == 0 ||
+		s.BorrowAssetsUsd == nil || s.BorrowAssetsUsd.Sign() == 0 {
 		return nil
 	}
+
 	e18 := new(big.Float).SetPrec(128).SetInt(
-		new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil),
+		new(big.Int).Exp(big.NewInt(10), big.NewInt(15), nil),
 	)
-	lltv := new(big.Float).Quo(
-		new(big.Float).SetInt(s.LLTV),
-		e18, // normalize 1e18 → [0,1]
+	// LLTV normalisé proprement
+	lltv := new(big.Float).SetPrec(128).Quo(
+		new(big.Float).SetInt(s.LLTV), e18,
 	)
 
-	// (collateral × collateralPrice × lltv)
-	num := new(big.Float).SetInt(s.CollateralAssets)
-	num.Mul(num, lltv)
+	collateralDec := new(big.Float).SetInt(
+		new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(s.CollateralsDecimals)), nil),
+	)
+	borrowDec := new(big.Float).SetInt(
+		new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(s.BorrowDecimals)), nil),
+	)
 
-	// (borrow × borrowPrice)
-	den := new(big.Float).SetInt(s.BorrowAssets)
-	den.Mul(den, s.BorrowAssetsUsd)
+	num := new(big.Float).SetPrec(128).SetInt(s.CollateralAssets)
+	num.Quo(num, collateralDec)         // wei → unité
+	num.Mul(num, s.CollateralAssetsUsd) // × prix
+	num.Mul(num, lltv)                  // × lltv normalisé
+
+	den := new(big.Float).SetPrec(128).SetInt(s.BorrowAssets)
+	den.Quo(den, borrowDec)         // wei → unité
+	den.Mul(den, s.BorrowAssetsUsd) // × prix
 
 	return new(big.Float).Quo(num, den)
 }
-
 func (s *BorrowerStats) Print() {
-	fmt.Println("Borrower stat ")
-	fmt.Printf("borrow assets: %d \n", s.BorrowAssets.Int64())
-	f, _ := s.BorrowAssetsUsd.Float64()
-	fmt.Printf("borrow assetsUSD: %f \n", f)
-	fmt.Printf("borrow shares: %d \n", s.Shares.Int64())
-	fmt.Printf("collateral: %d \n", s.CollateralAssets.Int64())
-	f, _ = s.CollateralAssetsUsd.Float64()
-	fmt.Printf("collateralprice: %f \n", f)
+	s.BorrowDecimals = 6
+	s.CollateralsDecimals = 18
+	fmt.Println(s.HealthFactor())
 
 }
