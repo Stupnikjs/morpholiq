@@ -5,40 +5,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	"math/big"
 	"net/http"
 	"strings"
-	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 )
 
+// the point of borrowers.go is to filter morpho api borrowers to keep the liquidable ones
+// more precise on chain checks will validate liquidate calls
 // health factor = (collateral × collateralPrice × LLTV) / (shares × sharePrice × borrowPrice)
 // // Morpho SDK / BlueHelper
 // assets = borrowShares * totalBorrowAssets / totalBorrowShares
-
-type BorrowerStats struct {
-	Shares              *big.Int // borrow shares
-	BorrowAssets        *big.Int // valeur réelle empruntée
-	BorrowAssetsUsd     *big.Float
-	CollateralAssets    *big.Int   // collateral déposé
-	CollateralAssetsUsd *big.Float // collateral déposé
-	LLTV                *big.Int   // mettre ailleur peut etre
-
-}
-
-type MarketState struct {
-	MarketParams       MorphoMarketParams
-	BorrowAssetUsd     *big.Float
-	CollateralAssetUsd *big.Float
-	BorrowerCache      BorrowerCache
-}
-type BorrowerCache map[common.Address]BorrowerStats
-
-type MorphoEngine struct {
-	// lecture sans lock, zéro contention
-	snapshot atomic.Pointer[map[[32]byte]MarketState]
-}
 
 func NewMorphoEngine(params []MorphoMarketParams) *MorphoEngine {
 	engine := &MorphoEngine{}
@@ -111,16 +88,17 @@ func (b *MorphoEngine) LoadBorrowerCache(param MorphoMarketParams) error {
 		}
 
 		marketState.BorrowerCache[common.HexToAddress(item.User.Address)] = BorrowerStats{
-			Shares:              ParseBigInt(item.State.BorrowShares.String()),
-			BorrowAssets:        ParseBigInt(item.State.BorrowAssets.String()),
-			BorrowAssetsUsd:     ParseBigFloat(item.State.BorrowAssetsUsd.String()),
-			CollateralAssets:    ParseBigInt(item.State.Collateral.String()),
-			CollateralAssetsUsd: ParseBigFloat(item.State.CollateralUsd.String()),
-			LLTV:                ParseBigInt(item.Market.LLTV.String()),
+			Shares:           ParseBigInt(item.State.BorrowShares.String()),
+			BorrowAssets:     ParseBigInt(item.State.BorrowAssets.String()),
+			CollateralAssets: ParseBigInt(item.State.Collateral.String()),
+			LLTV:             ParseBigInt(item.Market.LLTV.String()),
 		}
-		marketState.BorrowAssetUsd = ParseBigFloat(item.State.BorrowAssetsUsd.String())
-		marketState.CollateralAssetUsd = ParseBigFloat(item.State.CollateralUsd.String())
-
+		if marketState.BorrowAssetUsd == nil {
+			marketState.BorrowAssetUsd = ParseBigFloat(item.State.BorrowAssetsUsd.String())
+		}
+		if marketState.CollateralAssetUsd == nil {
+			marketState.CollateralAssetUsd = ParseBigFloat(item.State.CollateralUsd.String())
+		}
 	}
 	old := b.snapshot.Load()
 	newMap := make(map[[32]byte]MarketState, len(*old)+1)
@@ -155,8 +133,17 @@ func (e *MorphoEngine) Update(marketID [32]byte, state MarketState) {
 		// Si un autre writer a swappé entre temps → on recommence
 	}
 }
-func (s *BorrowerStats) HealthFactor(colDecimals, borrowDecimals uint16) *big.Float {
-	if s.BorrowAssets == nil || s.BorrowAssets.Sign() == 0 ||
+
+// HF index is a struct of 2 maps indexing HF by common.Address
+// enabling quick update of HF
+func (e *MorphoEngine) BuildHFIndex() HFIndex {
+	return HFIndex{}
+}
+
+/*
+OLD HealthFactor
+
+if s.BorrowAssets == nil || s.BorrowAssets.Sign() == 0 ||
 		s.BorrowAssetsUsd == nil || s.BorrowAssetsUsd.Sign() == 0 {
 		return nil
 	}
@@ -186,22 +173,8 @@ func (s *BorrowerStats) HealthFactor(colDecimals, borrowDecimals uint16) *big.Fl
 	den.Mul(den, s.BorrowAssetsUsd) // × prix
 
 	return new(big.Float).Quo(num, den)
-}
 
-func (e *MorphoEngine) GetLiquidableByMarketId(param MorphoMarketParams) []BorrowerStats {
 
-	cache := e.Get(param.ID)
-	liquidable := make([]BorrowerStats, 0, len(cache.BorrowerCache))
-	one := new(big.Float).SetFloat64(1.0)
-	for _, v := range cache.BorrowerCache {
-		hf := v.HealthFactor(param.CollateralTokenDecimals, param.LoanTokenDecimals)
 
-		if hf == nil {
-			continue
-		}
-		if hf.Cmp(one) < 0 {
-			liquidable = append(liquidable, v)
-		}
-	}
-	return liquidable
-}
+
+*/

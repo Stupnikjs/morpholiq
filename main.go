@@ -60,9 +60,4 @@ func main() {
 		fmt.Println(err)
 	}
 
-	liquidable := bEngine.GetLiquidableByMarketId(params[0])
-
-	for _, l := range liquidable {
-		fmt.Println(l.HealthFactor(params[0].CollateralTokenDecimals, params[0].LoanTokenDecimals))
-	}
 }
