@@ -53,7 +53,7 @@ func main() {
 		},
 	}
 
-	bEngine := morpho.NewBorrowerEngine(params)
+	bEngine := morpho.NewMorphoEngine(params)
 	err = bEngine.LoadBorrowerCache(params[0])
 
 	if err != nil {

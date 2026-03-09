@@ -27,25 +27,34 @@ type BorrowerStats struct {
 
 }
 
+type MarketState struct {
+	MarketParams       MorphoMarketParams
+	BorrowAssetUsd     *big.Float
+	CollateralAssetUsd *big.Float
+	BorrowerCache      BorrowerCache
+}
 type BorrowerCache map[common.Address]BorrowerStats
 
-type BorrowerEngine struct {
+type MorphoEngine struct {
 	// lecture sans lock, zéro contention
-	snapshot atomic.Pointer[map[[32]byte]BorrowerCache]
+	snapshot atomic.Pointer[map[[32]byte]MarketState]
 }
 
-func NewBorrowerEngine(params []MorphoMarketParams) *BorrowerEngine {
-	engine := &BorrowerEngine{}
+func NewMorphoEngine(params []MorphoMarketParams) *MorphoEngine {
+	engine := &MorphoEngine{}
 
-	initialMap := make(map[[32]byte]BorrowerCache, len(params))
+	initialMap := make(map[[32]byte]MarketState, len(params))
 	engine.snapshot.Store(&initialMap)
 
 	return engine
 }
 
-func (b *BorrowerEngine) LoadBorrowerCache(param MorphoMarketParams) error {
+func (b *MorphoEngine) LoadBorrowerCache(param MorphoMarketParams) error {
 	marketIDstr := "0x" + hex.EncodeToString(param.ID[:])
-	cache := make(BorrowerCache, 1000)
+	marketState := MarketState{
+		MarketParams:  param,
+		BorrowerCache: make(BorrowerCache),
+	}
 	query := fmt.Sprintf(`{
         "query": "{ marketPositions(first: 1000, where: { marketUniqueKey_in: [\"%s\"], chainId_in: [%d] }) 
 		{ items 
@@ -101,7 +110,7 @@ func (b *BorrowerEngine) LoadBorrowerCache(param MorphoMarketParams) error {
 			continue
 		}
 
-		cache[common.HexToAddress(item.User.Address)] = BorrowerStats{
+		marketState.BorrowerCache[common.HexToAddress(item.User.Address)] = BorrowerStats{
 			Shares:              ParseBigInt(item.State.BorrowShares.String()),
 			BorrowAssets:        ParseBigInt(item.State.BorrowAssets.String()),
 			BorrowAssetsUsd:     ParseBigFloat(item.State.BorrowAssetsUsd.String()),
@@ -109,12 +118,14 @@ func (b *BorrowerEngine) LoadBorrowerCache(param MorphoMarketParams) error {
 			CollateralAssetsUsd: ParseBigFloat(item.State.CollateralUsd.String()),
 			LLTV:                ParseBigInt(item.Market.LLTV.String()),
 		}
+		marketState.BorrowAssetUsd = ParseBigFloat(item.State.BorrowAssetsUsd.String())
+		marketState.CollateralAssetUsd = ParseBigFloat(item.State.CollateralUsd.String())
 
 	}
 	old := b.snapshot.Load()
-	newMap := make(map[[32]byte]BorrowerCache, len(*old)+1)
+	newMap := make(map[[32]byte]MarketState, len(*old)+1)
 	maps.Copy(newMap, *old)
-	newMap[param.ID] = cache
+	newMap[param.ID] = marketState
 	swapped := b.snapshot.CompareAndSwap(old, &newMap)
 	if swapped {
 		return nil
@@ -122,20 +133,20 @@ func (b *BorrowerEngine) LoadBorrowerCache(param MorphoMarketParams) error {
 	return fmt.Errorf("swap failed ")
 }
 
-func (e *BorrowerEngine) Get(marketID [32]byte) BorrowerCache {
+func (e *MorphoEngine) Get(marketID [32]byte) MarketState {
 	snapshot := e.snapshot.Load() // atomique
 	return (*snapshot)[marketID]
 }
 
 // Écrire — copie + swap
-func (e *BorrowerEngine) Update(marketID [32]byte, cache BorrowerCache) {
+func (e *MorphoEngine) Update(marketID [32]byte, state MarketState) {
 	for {
 		old := e.snapshot.Load()
 
 		// Copie
-		newMap := make(map[[32]byte]BorrowerCache, len(*old))
+		newMap := make(map[[32]byte]MarketState, len(*old))
 		maps.Copy(newMap, *old)
-		newMap[marketID] = cache
+		newMap[marketID] = state
 
 		// Swap atomique — CompareAndSwap pour éviter les races entre writers
 		if e.snapshot.CompareAndSwap(old, &newMap) {
@@ -177,12 +188,12 @@ func (s *BorrowerStats) HealthFactor(colDecimals, borrowDecimals uint16) *big.Fl
 	return new(big.Float).Quo(num, den)
 }
 
-func (e *BorrowerEngine) GetLiquidableByMarketId(param MorphoMarketParams) []BorrowerStats {
+func (e *MorphoEngine) GetLiquidableByMarketId(param MorphoMarketParams) []BorrowerStats {
 
 	cache := e.Get(param.ID)
-	liquidable := make([]BorrowerStats, 0, len(cache))
+	liquidable := make([]BorrowerStats, 0, len(cache.BorrowerCache))
 	one := new(big.Float).SetFloat64(1.0)
-	for _, v := range cache {
+	for _, v := range cache.BorrowerCache {
 		hf := v.HealthFactor(param.CollateralTokenDecimals, param.LoanTokenDecimals)
 
 		if hf == nil {
