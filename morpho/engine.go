@@ -14,10 +14,8 @@ import (
 
 func NewMorphoEngine(params []MorphoMarketParams) *MorphoEngine {
 	engine := &MorphoEngine{}
-
 	initialMap := make(map[[32]byte]MarketState, len(params))
 	engine.snapshot.Store(&initialMap)
-
 	return engine
 }
 
@@ -58,11 +56,11 @@ func (b *MorphoEngine) LoadBorrowerCache(param MorphoMarketParams) error {
 						Address string `json:"address"`
 					} `json:"user"`
 					State struct {
-						BorrowShares    json.Number `json:"borrowShares"`
-						BorrowAssets    json.Number `json:"borrowAssets"`
-						BorrowAssetsUsd json.Number `json:"borrowAssetsUsd"`
-						Collateral      json.Number `json:"collateral"`
-						CollateralUsd   json.Number `json:"collateralUsd"`
+						BorrowShares        json.Number `json:"borrowShares"`
+						BorrowAssets        json.Number `json:"borrowAssets"`
+						BorrowAssetsUsd     json.Number `json:"borrowAssetsUsd"`
+						Collateral          json.Number `json:"collateral"`
+						CollateralAssetsUsd json.Number `json:"collateralUsd"`
 					} `json:"state"`
 					Market struct {
 						LLTV json.Number `json:"lltv"`
@@ -83,17 +81,14 @@ func (b *MorphoEngine) LoadBorrowerCache(param MorphoMarketParams) error {
 		}
 
 		marketState.BorrowerCache[common.HexToAddress(item.User.Address)] = BorrowerStats{
-			Shares:           ParseBigInt(item.State.BorrowShares.String()),
-			BorrowAssets:     ParseBigInt(item.State.BorrowAssets.String()),
-			CollateralAssets: ParseBigInt(item.State.Collateral.String()),
-			LLTV:             ParseBigInt(item.Market.LLTV.String()),
+			Shares:              ParseBigInt(item.State.BorrowShares.String()),
+			BorrowAssets:        ParseBigInt(item.State.BorrowAssets.String()),
+			BorrowAssetsUSD:     ParseBigInt(item.State.BorrowAssetsUsd.String()),
+			CollateralAssetsUSD: ParseBigInt(item.State.CollateralAssetsUsd.String()),
+			CollateralAssets:    ParseBigInt(item.State.Collateral.String()),
+			LLTV:                ParseBigInt(item.Market.LLTV.String()),
 		}
-		if marketState.BorrowAssetUsd == nil {
-			marketState.BorrowAssetUsd = ParseBigFloat(item.State.BorrowAssetsUsd.String())
-		}
-		if marketState.CollateralAssetUsd == nil {
-			marketState.CollateralAssetUsd = ParseBigFloat(item.State.CollateralUsd.String())
-		}
+
 	}
 	old := b.snapshot.Load()
 	newMap := make(map[[32]byte]MarketState, len(*old)+1)
@@ -142,9 +137,9 @@ func (m *MarketState) MergeHFInto(hfMap map[BorrowPosition]*big.Int) {
 		pos := BorrowPosition{MarketID: m.MarketParams.ID, Address: k}
 		hfParams := HFparams{
 			borrowAssets:            v.BorrowAssets,
-			borrowAssetsUSD:         m.BorrowAssetUsd,
+			borrowAssetsUSD:         v.BorrowAssetsUSD,
 			collateralAssets:        v.CollateralAssets,
-			collateralAssetsUSD:     m.CollateralAssetUsd,
+			collateralAssetsUSD:     v.CollateralAssetsUSD,
 			borrowAssetDecimals:     m.MarketParams.LoanTokenDecimals,
 			collateralAssetDecimals: m.MarketParams.CollateralTokenDecimals,
 		}

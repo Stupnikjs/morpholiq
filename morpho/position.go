@@ -13,10 +13,9 @@ import (
 // reel call a la blockchain pour check la position
 func PrintPosition(pos BorrowPosition, client *w3.Client, morphoAddress common.Address, funcPosition w3types.Func, funcMarket w3types.Func) {
 	var (
-		supplyShares big.Int
-		borrowShares big.Int
-		collateral   big.Int
-
+		supplyShares      big.Int
+		borrowShares      big.Int
+		collateral        big.Int
 		totalSupplyAssets big.Int
 		totalSupplyShares big.Int
 		totalBorrowAssets big.Int
@@ -40,6 +39,7 @@ func PrintPosition(pos BorrowPosition, client *w3.Client, morphoAddress common.A
 
 	fmt.Printf("Address:       %s\n", pos.Address.Hex())
 	fmt.Printf("BorrowShares:  %s\n", borrowShares.String())
+	fmt.Printf("BorrowAssets:  %s\n", borrowAssets.String())
 	fmt.Printf("BorrowAssets:  %s\n", borrowAssets.String())
 	fmt.Printf("Collateral:    %s\n", collateral.String())
 }
