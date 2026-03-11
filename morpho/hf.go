@@ -53,6 +53,9 @@ func (h *HFManager) GetLiquidable(lltv *big.Int) []common.Address {
 			continue // bad debt (collateral < borrow)
 		}
 		hfLltv := HealthFactorLLTVScaled(v, lltv)
+		if hfLltv == nil || hfLltv.Sign() == 0 {
+			continue
+		}
 		if hfLltv.Cmp(threshold) < 0 {
 			liquidable = append(liquidable, k.Address) // ✅ liquidable rentable
 		}

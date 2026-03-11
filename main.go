@@ -21,6 +21,7 @@ var (
 	BaseWETHUSDC = [32]byte(
 		common.HexToHash("0x3b3769cfca57be2eaed03fcc5299c25691b77781a1e124e7a8d520eb9a7eabb5"),
 	)
+	MorphoMain = common.HexToAddress("0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb")
 )
 
 func main() {
@@ -65,5 +66,7 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
+
+	bEngine.DebugPosition(liq[0])
 
 }

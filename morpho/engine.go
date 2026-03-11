@@ -151,3 +151,16 @@ func (m *MarketState) MergeHFInto(hfMap map[BorrowPosition]*big.Int) {
 		hfMap[pos] = HealthFactor(hfParams)
 	}
 }
+
+func (e *MorphoEngine) DebugPosition(addr common.Address) {
+	for _, ms := range *e.snapshot.Load() {
+		v, ok := ms.BorrowerCache[addr]
+		if !ok {
+			continue
+		}
+		fmt.Printf("address:          %s\n", addr.Hex())
+		fmt.Printf("collateralAssets: %s\n", v.CollateralAssets.String())
+		fmt.Printf("borrowAssets:     %s\n", v.BorrowAssets.String())
+		fmt.Printf("lltv:             %s\n", v.LLTV.String())
+	}
+}
