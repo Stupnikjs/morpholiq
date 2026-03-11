@@ -5,17 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"math/big"
 	"net/http"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 )
-
-// the point of borrowers.go is to filter morpho api borrowers to keep the liquidable ones
-// more precise on chain checks will validate liquidate calls
-// health factor = (collateral × collateralPrice × LLTV) / (shares × sharePrice × borrowPrice)
-// // Morpho SDK / BlueHelper
-// assets = borrowShares * totalBorrowAssets / totalBorrowShares
 
 func NewMorphoEngine(params []MorphoMarketParams) *MorphoEngine {
 	engine := &MorphoEngine{}
@@ -134,47 +129,25 @@ func (e *MorphoEngine) Update(marketID [32]byte, state MarketState) {
 	}
 }
 
-// HF index is a struct of 2 maps indexing HF by common.Address
-// enabling quick update of HF
-func (e *MorphoEngine) BuildHFIndex() HFIndex {
-	return HFIndex{}
+func (e *MorphoEngine) BuildHFIndex() map[BorrowPosition]*big.Int {
+	hfMap := make(map[BorrowPosition]*big.Int)
+	for _, ms := range *e.snapshot.Load() {
+		ms.MergeHFInto(hfMap) // écrit directement dedans
+	}
+	return hfMap
 }
 
-/*
-OLD HealthFactor
-
-if s.BorrowAssets == nil || s.BorrowAssets.Sign() == 0 ||
-		s.BorrowAssetsUsd == nil || s.BorrowAssetsUsd.Sign() == 0 {
-		return nil
+func (m *MarketState) MergeHFInto(hfMap map[BorrowPosition]*big.Int) {
+	for k, v := range m.BorrowerCache {
+		pos := BorrowPosition{MarketID: m.MarketParams.ID, Address: k}
+		hfParams := HFparams{
+			borrowAssets:            v.BorrowAssets,
+			borrowAssetsUSD:         m.BorrowAssetUsd,
+			collateralAssets:        v.CollateralAssets,
+			collateralAssetsUSD:     m.CollateralAssetUsd,
+			borrowAssetDecimals:     m.MarketParams.LoanTokenDecimals,
+			collateralAssetDecimals: m.MarketParams.CollateralTokenDecimals,
+		}
+		hfMap[pos] = HealthFactor(hfParams)
 	}
-
-	e18 := new(big.Float).SetPrec(128).SetInt(
-		new(big.Int).Exp(big.NewInt(10), big.NewInt(15), nil),
-	)
-	// LLTV normalisé proprement
-	lltv := new(big.Float).SetPrec(128).Quo(
-		new(big.Float).SetInt(s.LLTV), e18,
-	)
-
-	collateralDec := new(big.Float).SetInt(
-		new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(colDecimals)), nil),
-	)
-	borrowDec := new(big.Float).SetInt(
-		new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(borrowDecimals)), nil),
-	)
-
-	num := new(big.Float).SetPrec(128).SetInt(s.CollateralAssets)
-	num.Quo(num, collateralDec)         // wei → unité
-	num.Mul(num, s.CollateralAssetsUsd) // × prix
-	num.Mul(num, lltv)                  // × lltv normalisé
-
-	den := new(big.Float).SetPrec(128).SetInt(s.BorrowAssets)
-	den.Quo(den, borrowDec)         // wei → unité
-	den.Mul(den, s.BorrowAssetsUsd) // × prix
-
-	return new(big.Float).Quo(num, den)
-
-
-
-
-*/
+}

@@ -23,3 +23,10 @@ func ParseBigFloat(s string) *big.Float {
 	return result
 
 }
+
+// returns 10 ^ y
+func ExponentFloat(y uint) *big.Float {
+	return new(big.Float).SetInt(
+		new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(y)), nil),
+	)
+}

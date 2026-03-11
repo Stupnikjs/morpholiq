@@ -2,10 +2,33 @@ package morpho
 
 import (
 	"math/big"
-	"sync"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/lmittmann/w3"
+)
+
+var (
+	MorphoBlueAddr = w3.A("0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb") // Morpho Blue mainnet
+
+	// La (pool)
+	// market(id) → (totalSupplyAssets, totalSupplyShares, totalBorrowAssets, totalBorrowShares, lastUpdate, fee)
+	MarketFunc = w3.MustNewFunc(
+		"market(bytes32)",
+		"uint128,uint128,uint128,uint128,uint128,uint128",
+	)
+
+	// position(id, user) → (supplyShares, borrowShares, collateral)
+	PositionFunc = w3.MustNewFunc(
+		"position(bytes32,address)",
+		"uint256,uint128,uint128",
+	)
+
+	// idToMarketParams(id) → (loanToken, collateralToken, oracle, irm, lltv)
+	IdToMarketParamsFunc = w3.MustNewFunc(
+		"idToMarketParams(bytes32)",
+		"address,address,address,address,uint256",
+	)
 )
 
 type BorrowerStats struct {
@@ -29,15 +52,30 @@ type MorphoEngine struct {
 	snapshot atomic.Pointer[map[[32]byte]MarketState]
 }
 
-type HFIndex struct {
-	// HF → []Address (trié naturellement par la map triée)
-	byHF map[string][]common.Address // clé = HF.Text('f', 18) pour comparaison exacte
+type BorrowPosition struct {
+	MarketID [32]byte
+	Address  common.Address
+}
 
-	// Address → HF (pour update O(1))
-	byAddr map[common.Address]*big.Float
+type MorphoMarketParams struct {
+	ID                      [32]byte
+	ChainID                 uint32
+	LoanToken               common.Address
+	CollateralToken         common.Address
+	Oracle                  common.Address
+	IRM                     common.Address
+	LLTV                    *big.Int // liquidation LTV in WAD (1e18 = 100%)
+	LoanTokenDecimals       uint16
+	CollateralTokenDecimals uint16
+}
 
-	// Slice triée des clés HF pour itération rapide
-	sorted []string
+type HFManager struct {
+	HFMap map[BorrowPosition]*big.Int
+}
 
-	mu sync.RWMutex
+// scaled by 10e6
+type HFparams struct {
+	borrowAssets, collateralAssets               *big.Int
+	borrowAssetsUSD, collateralAssetsUSD         *big.Float
+	borrowAssetDecimals, collateralAssetDecimals uint16
 }

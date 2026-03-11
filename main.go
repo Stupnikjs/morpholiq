@@ -55,6 +55,12 @@ func main() {
 
 	bEngine := morpho.NewMorphoEngine(params)
 	err = bEngine.LoadBorrowerCache(params[0])
+	HFIndex := bEngine.BuildHFIndex()
+	manager := morpho.HFManager{
+		HFMap: HFIndex,
+	}
+
+	liq := manager.GetLiquidable(params[0].LLTV)
 
 	if err != nil {
 		fmt.Println(err)
