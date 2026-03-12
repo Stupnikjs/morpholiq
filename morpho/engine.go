@@ -150,7 +150,7 @@ func (m *MarketState) MergeHFInto(hfMap map[BorrowPosition]*big.Int) {
 			borrowAssetDecimals:     m.MarketParams.LoanTokenDecimals,
 			collateralAssetDecimals: m.MarketParams.CollateralTokenDecimals,
 		}
-		hfMap[pos] = HealthFactor(hfParams)
+		hfMap[pos] = HealthFactorUSD(hfParams)
 	}
 }
 
@@ -173,7 +173,7 @@ func (e *MorphoEngine) Scanner(client *w3.Client, markets []MorphoMarketParams) 
 		return fmt.Errorf("Engine must be initiallized")
 	}
 
-	manager := NewHFManager()
+	manager := e.NewHFManager()
 
 	for _, m := range markets {
 		id := m.ID
@@ -188,7 +188,8 @@ func (e *MorphoEngine) Scanner(client *w3.Client, markets []MorphoMarketParams) 
 				e.LoadBorrowerCache(p)
 			}
 			// rebuild HFMap après refresh
-			manager.HFMap = NewHFManager()
+			newMap := e.BuildHFIndex()
+			manager.ReplaceHFMap(newMap)
 		}
 	}()
 

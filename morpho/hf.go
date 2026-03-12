@@ -16,9 +16,9 @@ var E18 *big.Int = new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
 // lecture
 func (e *MorphoEngine) NewHFManager() *HFManager {
 	hfIndex := e.BuildHFIndex()
-	manager := HFManager{
-		HFMap: ,
-	}
+	manager := HFManager{}
+	manager.HFMap.Store(&hfIndex)
+	return &manager
 }
 
 func (h *HFManager) GetHF(pos BorrowPosition) *big.Int {
