@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 
 	"github.com/Stupnikjs/morpholiq/morpho"
@@ -24,11 +25,9 @@ func main() {
 		panic(err)
 	}
 
-	engine := morpho.InitEngine(morpho.Params)
-	err = engine.LoadBorrowerCache(morpho.Params[0])
-	if err != nil {
-		panic(err)
-	}
+	//engine := morpho.InitEngine(morpho.Params)
+	fmt.Println(morpho.FetchMarkets())
+	//engine.Scanner(client, morpho.Params)
 
 }
 

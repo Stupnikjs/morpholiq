@@ -41,15 +41,6 @@ type BorrowPosition struct {
 	Address  common.Address
 }
 
-type LiquidablePosition struct {
-	BorrowPosition
-	LoanToken       common.Address
-	CollateralToken common.Address
-	Oracle          common.Address
-	BorrowAssets    *big.Int
-	CollateralAsset *big.Int
-}
-
 type MorphoMarketParams struct {
 	ID                      [32]byte
 	ChainID                 uint32
@@ -202,19 +193,6 @@ func (m *MarketState) MergeHFInto(hfMap map[BorrowPosition]*big.Int) {
 	}
 }
 
-func (e *MorphoEngine) DebugPosition(addr common.Address) {
-	for _, ms := range *e.snapshot.Load() {
-		v, ok := ms.BorrowerCache[addr]
-		if !ok {
-			continue
-		}
-		fmt.Printf("address:          %s\n", addr.Hex())
-		fmt.Printf("collateralAssets: %s\n", v.CollateralAssets.String())
-		fmt.Printf("borrowAssets:     %s\n", v.BorrowAssets.String())
-		fmt.Printf("lltv:             %s\n", v.LLTV.String())
-	}
-}
-
 func (e *MorphoEngine) Scanner(client *w3.Client, markets []MorphoMarketParams) error {
 	snap := e.snapshot.Load()
 	if snap == nil {
@@ -222,10 +200,12 @@ func (e *MorphoEngine) Scanner(client *w3.Client, markets []MorphoMarketParams) 
 	}
 
 	manager := e.NewHFManager()
-
+	manager.MarketMap = make(MarketMap, len(markets))
+	manager.LLTVmap = make(map[[32]byte]*big.Int, len(markets))
 	for _, m := range markets {
 		id := m.ID
 		manager.MarketMap[id] = m
+		manager.LLTVmap[id] = m.LLTV
 	}
 
 	go func() {
@@ -242,18 +222,16 @@ func (e *MorphoEngine) Scanner(client *w3.Client, markets []MorphoMarketParams) 
 	}()
 
 	for {
-
+		time.Sleep(1 * time.Second)
 		// recupere les liquidables ou futur liquidables
 		liquidable := manager.GetLiquidable()
 		for _, p := range liquidable {
-			onChainHF, profit, err := manager.OnChainCalc(client, p)
+			_, profit, err := manager.OnChainCalc(client, p)
 			if err != nil {
 				return err
 			}
 
-			// maybe test transaction before executing liquidation
-			_ = onChainHF
-			if big.NewInt(0).Cmp(profit) <= 0 {
+			if big.NewInt(1_000_000).Cmp(profit) <= 0 {
 				continue
 			}
 

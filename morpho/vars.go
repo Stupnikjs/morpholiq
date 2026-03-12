@@ -8,8 +8,9 @@ import (
 )
 
 var (
-	DRPC   = "https://lb.drpc.live/ethereum/AhuxMhCqfkI8pF_0y4Fpi89GWcIMFIwR8ZsatuZZzRRv"
-	PubRPC = "https://ethereum-rpc.publicnode.com"
+	DRPC     = "https://lb.drpc.live/ethereum/AhuxMhCqfkI8pF_0y4Fpi89GWcIMFIwR8ZsatuZZzRRv"
+	BASEDRPC = "https://lb.drpc.live/base/AhuxMhCqfkI8pF_0y4Fpi89GWcIMFIwR8ZsatuZZzRRv"
+	PubRPC   = "https://ethereum-rpc.publicnode.com"
 	// wstETH (collateral) / USDC (loan) — LLTV 86% — un des marchés les plus actifs
 	TestMarketID = [32]byte(
 		common.HexToHash("0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc"),
@@ -32,6 +33,66 @@ var (
 			LLTV:                    big.NewInt(860000000000000000),
 			LoanTokenDecimals:       6,
 			CollateralTokenDecimals: 18,
+		},
+	}
+
+	BaseParams = []MorphoMarketParams{
+		// ─────────────────────────────────────────────────────────────
+		// 1. cbBTC / USDC — 86% LLTV
+		//    Le plus gros marché sur Base, ~$1B+ de borrow actif
+		//    Powering Coinbase's BTC-backed loan product
+		// ─────────────────────────────────────────────────────────────
+		{
+			ID: [32]byte(common.HexToHash(
+				"0x9103c3b4e834476c9a62ea009ba2c884ee42e94e6e314a26f04d312434191836")),
+			ChainID:         8453,
+			LoanToken:       common.HexToAddress("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"), // USDC
+			CollateralToken: common.HexToAddress("0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf"), // cbBTC
+			Oracle:          common.HexToAddress("0x663BECd10daE6C4A3Dcd89F1d76c1174199639B9"),
+			IRM:             common.HexToAddress("0x46415998764C29aB2a25CbeA6254146D50D22687"), // AdaptiveCurveIRM
+			LLTV: big.NewInt(0).SetBytes(common.HexToHash(
+				"0x00000000000000000000000000000000000000000000000bee15e785b06c0000").Bytes()),
+			// 860000000000000000 = 86%
+			LoanTokenDecimals:       6,
+			CollateralTokenDecimals: 8,
+		},
+
+		// ─────────────────────────────────────────────────────────────
+		// 2. WETH / USDC — 86% LLTV
+		//    Second plus gros marché sur Base par borrow volume
+		// ─────────────────────────────────────────────────────────────
+		{
+			ID: [32]byte(common.HexToHash(
+				"0xf10437266b9dd52751bd6255e15cccd0cdf5c75b58c1a3e2621130c905cd8ed9")),
+			ChainID:         8453,
+			LoanToken:       common.HexToAddress("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"), // USDC
+			CollateralToken: common.HexToAddress("0x4200000000000000000000000000000000000006"), // WETH
+			Oracle:          common.HexToAddress("0x4E08B779fD4AB374bCe9D36aE88c3Dbc36dCb48A"),
+			IRM:             common.HexToAddress("0x46415998764C29aB2a25CbeA6254146D50D22687"), // AdaptiveCurveIRM
+			LLTV: big.NewInt(0).SetBytes(common.HexToHash(
+				"0x00000000000000000000000000000000000000000000000bee15e785b06c0000").Bytes()),
+			// 860000000000000000 = 86%
+			LoanTokenDecimals:       6,
+			CollateralTokenDecimals: 18,
+		},
+
+		// ─────────────────────────────────────────────────────────────
+		// 3. cbBTC / USDC — 91.5% LLTV (variante plus agressive)
+		//    Même pair que #1 mais LLTV plus élevé, marché distinct
+		// ─────────────────────────────────────────────────────────────
+		{
+			ID: [32]byte(common.HexToHash(
+				"0x3b3769cfca57be2eaed0f18b9d049fcbeafbe7ca3b6109ebf7d85f22daefe456")),
+			ChainID:         8453,
+			LoanToken:       common.HexToAddress("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"), // USDC
+			CollateralToken: common.HexToAddress("0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf"), // cbBTC
+			Oracle:          common.HexToAddress("0x663BECd10daE6C4A3Dcd89F1d76c1174199639B9"),
+			IRM:             common.HexToAddress("0x46415998764C29aB2a25CbeA6254146D50D22687"), // AdaptiveCurveIRM
+			LLTV: big.NewInt(0).SetBytes(common.HexToHash(
+				"0x00000000000000000000000000000000000000000000000caa35e978b9c40000").Bytes()),
+			// 915000000000000000 = 91.5%
+			LoanTokenDecimals:       6,
+			CollateralTokenDecimals: 8,
 		},
 	}
 

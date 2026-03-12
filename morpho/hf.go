@@ -87,10 +87,14 @@ func HealthFactorOraclePrice(oraclePrice, borrowAssets, collateralAssets *big.In
 // still scaled by 10e6
 func HealthFactorLLTVScaled(hf, lltv *big.Int) *big.Int {
 
+	if hf == nil || lltv == nil {
+		return nil
+	}
 	return new(big.Int).Div(
 		new(big.Int).Mul(hf, lltv),
 		E18,
 	)
+
 }
 
 func (h *HFManager) GetLiquidable() []BorrowPosition {
@@ -99,12 +103,11 @@ func (h *HFManager) GetLiquidable() []BorrowPosition {
 
 	for k, v := range *h.HFMap.Load() {
 		if v == nil || v.Sign() == 0 {
-			continue // bad debt, skip
+			continue
 		}
 		if v.Cmp(threshold) < 0 {
 			continue // bad debt (collateral < borrow)
 		}
-
 		hfLltv := HealthFactorLLTVScaled(v, h.LLTVmap[k.MarketID])
 		if hfLltv == nil || hfLltv.Sign() == 0 {
 			continue
@@ -142,8 +145,12 @@ func (h *HFManager) OnChainCalc(client *w3.Client, pos BorrowPosition) (*big.Int
 	}
 	threshold := big.NewInt(1_000_000)
 	borrowAssets := new(big.Int).Div(
-		new(big.Int).Mul(&borrowShares, &totalBorrowAssets),
-		&totalBorrowShares)
+		new(big.Int).Mul(
+			&borrowShares,
+			new(big.Int).Add(&totalBorrowAssets, big.NewInt(1)),
+		),
+		new(big.Int).Add(&totalBorrowShares, big.NewInt(1_000_000)),
+	)
 	hf := HealthFactorOraclePrice(&oraclePrice, borrowAssets, &collateralAssets)
 	if hf.Cmp(threshold) < 0 {
 		return hf, nil, nil
@@ -151,7 +158,10 @@ func (h *HFManager) OnChainCalc(client *w3.Client, pos BorrowPosition) (*big.Int
 
 	// incentive = 1e18/lltv - 1e18
 	incentive := new(big.Int).Sub(
-		new(big.Int).Div(E18, h.MarketMap[pos.MarketID].LLTV), // 1e18 / lltv
+		new(big.Int).Div(
+			new(big.Int).Mul(E18, E18),     // 1e36
+			h.MarketMap[pos.MarketID].LLTV, // 980000000000000000
+		), // = 1.0204...e18
 		E18, // - 1e18
 	)
 
@@ -159,15 +169,6 @@ func (h *HFManager) OnChainCalc(client *w3.Client, pos BorrowPosition) (*big.Int
 		incentive = MAX_INCENTIVE
 	}
 
-	/*
-		// étape 1 : convertir le collateral en loanToken
-		collateralInLoan = collateral * oraclePrice / 1e36
-
-		// étape 2 : diviser par (1 + incentive) pour trouver la dette remboursable
-		maxRepaid = collateralInLoan / (1 + incentive)
-				  = collateralInLoan * 1e18 / (1e18 + incentive)
-
-	*/
 	collateralInLoan := new(big.Int).Div(
 		new(big.Int).Mul(&collateralAssets, &oraclePrice),
 		TenPowInt(36),
@@ -187,13 +188,14 @@ func (h *HFManager) OnChainCalc(client *w3.Client, pos BorrowPosition) (*big.Int
 
 	// seizedValue = (repaidDebt * oraclePrice / 1e36) * (1e18 + incentive) / 1e18
 	// value du collateral recuperé
-	seizedValue := new(big.Int).Div(
-		new(big.Int).Mul(
-			new(big.Int).Div(new(big.Int).Mul(repaidDebt, &oraclePrice), TenPowInt(36)),
-			new(big.Int).Add(E18, incentive),
-		),
-		E18,
+
+	x := new(big.Int).Mul(
+		repaidDebt,
+		new(big.Int).Add(E18, incentive),
 	)
+
+	seizedValue := new(big.Int).Div(x, TenPowInt(18))
+
 	// profit = collatéral saisi - dette remboursée
 	profit := new(big.Int).Sub(seizedValue, repaidDebt)
 

@@ -42,7 +42,7 @@ func FetchMarkets() ([]Market, error) {
             first: 100
             orderBy: SupplyAssetsUsd
             orderDirection: Desc
-            where: { chainId_in: [1] }
+            where: { chainId_in: [8453] }
         ) {
             items {
                 uniqueKey
@@ -71,3 +71,5 @@ func FetchMarkets() ([]Market, error) {
 	json.Unmarshal(data, &result)
 	return result.Data.Markets.Items, nil
 }
+
+// iterer sur les LLTV pour les plus grosse liquidation
