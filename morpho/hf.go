@@ -168,12 +168,15 @@ func (h *HFManager) OnChainCalc(client *w3.Client, pos BorrowPosition) (*big.Int
 				  = collateralInLoan * 1e18 / (1e18 + incentive)
 
 	*/
+	collateralInLoan := new(big.Int).Div(
+		new(big.Int).Mul(&collateralAssets, &oraclePrice),
+		TenPowInt(36),
+	)
+
+	// maxRepaid = collateralInLoan * 1e18 / (1e18 + incentive)
 	maxRepaid := new(big.Int).Div(
-		new(big.Int).Mul(
-			new(big.Int).Mul(&collateralAssets, TenPowInt(36)),
-			E18,
-		),
-		new(big.Int).Mul(&oraclePrice, new(big.Int).Add(E18, incentive)),
+		new(big.Int).Mul(collateralInLoan, E18),
+		new(big.Int).Add(E18, incentive),
 	)
 
 	// on ne peut pas rembourser plus que la dette totale
@@ -183,6 +186,7 @@ func (h *HFManager) OnChainCalc(client *w3.Client, pos BorrowPosition) (*big.Int
 	}
 
 	// seizedValue = (repaidDebt * oraclePrice / 1e36) * (1e18 + incentive) / 1e18
+	// value du collateral recuperé
 	seizedValue := new(big.Int).Div(
 		new(big.Int).Mul(
 			new(big.Int).Div(new(big.Int).Mul(repaidDebt, &oraclePrice), TenPowInt(36)),
