@@ -10,6 +10,7 @@ import (
 )
 
 // reel call a la blockchain pour check la position
+
 func GetPosition(pos BorrowPosition, client *w3.Client, morphoAddress common.Address) {
 	var (
 		supplyShares      big.Int

@@ -16,9 +16,10 @@ var (
 	BaseWETHUSDC = [32]byte(
 		common.HexToHash("0x3b3769cfca57be2eaed03fcc5299c25691b77781a1e124e7a8d520eb9a7eabb5"),
 	)
-	MorphoMain = common.HexToAddress("0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb")
-
-	Params = []MorphoMarketParams{
+	MorphoMain    = common.HexToAddress("0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb")
+	MAX_INCENTIVE = new(big.Int).SetUint64(150_000_000_000_000_000) // 0.15e18 = 15%
+	MinUSDProfit  = 2
+	Params        = []MorphoMarketParams{
 		// wstUSD / USDC
 		{
 			ID:                      TestMarketID,

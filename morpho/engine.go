@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/lmittmann/w3"
 )
 
 func InitEngine(params []MorphoMarketParams) *MorphoEngine {
@@ -166,26 +167,49 @@ func (e *MorphoEngine) DebugPosition(addr common.Address) {
 	}
 }
 
-func (e *MorphoEngine) Scanner(markets []MorphoMarketParams) error {
+func (e *MorphoEngine) Scanner(client *w3.Client, markets []MorphoMarketParams) error {
 	snap := e.snapshot.Load()
-	manager := HFManager{
-		HFMap: e.BuildHFIndex(),
-	}
 	if snap == nil {
 		return fmt.Errorf("Engine must be initiallized")
 	}
-	for {
-		// only every 5 min
-		go func() {
-			time.Sleep(5 * time.Minute)
+
+	manager := NewHFManager()
+
+	for _, m := range markets {
+		id := m.ID
+		manager.MarketMap[id] = m
+	}
+
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
 			for _, p := range markets {
 				e.LoadBorrowerCache(p)
 			}
+			// rebuild HFMap après refresh
+			manager.HFMap = NewHFManager()
+		}
+	}()
 
-		}()
-		_ = manager
+	for {
+
 		// recupere les liquidables ou futur liquidables
-		// liquidable := manager.GetLiquidable()
+		liquidable := manager.GetLiquidable()
+		for _, p := range liquidable {
+			onChainHF, profit, err := manager.OnChainCalc(client, p)
+			if err != nil {
+				return err
+			}
+
+			// maybe test transaction before executing liquidation
+			_ = onChainHF
+			if big.NewInt(0).Cmp(profit) <= 0 {
+				continue
+			}
+
+		}
+
 		// estimer tout les liquidables
 		// onchainHF => EstimateProfit()
 

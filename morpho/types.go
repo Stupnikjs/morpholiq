@@ -33,8 +33,11 @@ type BorrowPosition struct {
 	Address  common.Address
 }
 
-type LiquidablePos struct {
+type LiquidablePosition struct {
 	BorrowPosition
+	LoanToken       common.Address
+	CollateralToken common.Address
+	Oracle          common.Address
 	BorrowAssets    *big.Int
 	CollateralAsset *big.Int
 }
@@ -52,8 +55,9 @@ type MorphoMarketParams struct {
 }
 
 type HFManager struct {
-	LLTVmap map[[32]byte]*big.Int
-	HFMap   map[BorrowPosition]*big.Int
+	MarketMap MarketMap
+	LLTVmap   map[[32]byte]*big.Int
+	HFMap     atomic.Pointer[map[BorrowPosition]*big.Int]
 }
 
 // scaled by 10e6
@@ -62,3 +66,5 @@ type HFparams struct {
 	borrowAssetsUSD, collateralAssetsUSD         *big.Int
 	borrowAssetDecimals, collateralAssetDecimals uint16
 }
+
+type MarketMap map[[32]byte]MorphoMarketParams

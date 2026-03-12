@@ -1,13 +1,50 @@
 package morpho
 
 import (
+	"fmt"
+	"maps"
 	"math/big"
+
+	"github.com/lmittmann/w3"
+	"github.com/lmittmann/w3/module/eth"
 )
 
 var E18 *big.Int = new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
 
+// init
+
+// lecture
+func (e *MorphoEngine) NewHFManager() *HFManager {
+	hfIndex := e.BuildHFIndex()
+	manager := HFManager{
+		HFMap: ,
+	}
+}
+
+func (h *HFManager) GetHF(pos BorrowPosition) *big.Int {
+	return (*h.HFMap.Load())[pos]
+}
+
+// écriture
+func (h *HFManager) SetHF(pos BorrowPosition, hf *big.Int) {
+	for {
+		old := h.HFMap.Load()
+		newMap := make(map[BorrowPosition]*big.Int, len(*old))
+		maps.Copy(newMap, *old)
+		newMap[pos] = hf
+		if h.HFMap.CompareAndSwap(old, &newMap) {
+			return
+		}
+	}
+}
+
+// remplacement complet après refresh
+func (h *HFManager) ReplaceHFMap(newMap map[BorrowPosition]*big.Int) {
+	h.HFMap.Store(&newMap)
+}
+
 // scaled by 10e6
-func HealthFactor(p HFparams) *big.Int {
+func HealthFactorUSD(p HFparams) *big.Int {
 	if p.borrowAssets == nil || p.borrowAssets.Sign() == 0 ||
 		p.borrowAssetsUSD == nil || p.borrowAssetsUSD.Sign() == 0 {
 		return nil
@@ -21,6 +58,16 @@ func HealthFactor(p HFparams) *big.Int {
 	num := new(big.Int).Mul(p.collateralAssetsUSD, TenPowInt(6))
 	return new(big.Int).Quo(num, p.borrowAssetsUSD)
 
+}
+
+// oracle_price c'est le prix du collateral en loan token
+func HealthFactorOraclePrice(oraclePrice, borrowAssets, collateralAssets *big.Int) *big.Int {
+	// HF = coll * oracle / borrowassets * oracle scale
+	E36 := new(big.Int).Exp(big.NewInt(10), big.NewInt(36), nil)
+	num := new(big.Int).Mul(collateralAssets, oraclePrice) // collateral * oraclePrice
+	num.Mul(num, TenPowInt(6))                             // × 1e6 pour garder la précision
+	denom := new(big.Int).Mul(borrowAssets, E36)           // borrowAssets * 1e36
+	return new(big.Int).Div(num, denom)
 }
 
 // HF_lltv = hf × lltv / 1e18
@@ -37,7 +84,7 @@ func (h *HFManager) GetLiquidable() []BorrowPosition {
 	liquidable := []BorrowPosition{}
 	threshold := big.NewInt(1_000_000) // 1.0 × 1e6
 
-	for k, v := range h.HFMap {
+	for k, v := range *h.HFMap.Load() {
 		if v == nil || v.Sign() == 0 {
 			continue // bad debt, skip
 		}
@@ -57,3 +104,90 @@ func (h *HFManager) GetLiquidable() []BorrowPosition {
 	// a partir de toutes les addresses on recalcule les HF onchain
 	return liquidable
 }
+
+func (h *HFManager) OnChainCalc(client *w3.Client, pos BorrowPosition) (*big.Int, *big.Int, error) {
+	var (
+		supplyShares      big.Int
+		borrowShares      big.Int
+		collateralAssets  big.Int
+		totalSupplyAssets big.Int
+		totalSupplyShares big.Int
+		totalBorrowAssets big.Int
+		totalBorrowShares big.Int
+		oraclePrice       big.Int
+	)
+	// get oracle for price by marketID
+
+	err := client.Call(
+		eth.CallFunc(MorphoMain, PositionFunc, pos.MarketID, pos.Address).Returns(&supplyShares, &borrowShares, &collateralAssets),
+		eth.CallFunc(MorphoMain, MarketFunc, pos.MarketID).Returns(&totalSupplyAssets, &totalSupplyShares, &totalBorrowAssets, &totalBorrowShares, new(big.Int), new(big.Int)),
+		eth.CallFunc(h.MarketMap[pos.MarketID].Oracle, OraclePriceFunc).Returns(&oraclePrice),
+	)
+	if err != nil {
+		fmt.Println("err:", err)
+		return nil, nil, err
+	}
+	threshold := big.NewInt(1_000_000)
+	borrowAssets := new(big.Int).Div(
+		new(big.Int).Mul(&borrowShares, &totalBorrowAssets),
+		&totalBorrowShares)
+	hf := HealthFactorOraclePrice(&oraclePrice, borrowAssets, &collateralAssets)
+	if hf.Cmp(threshold) < 0 {
+		return hf, nil, nil
+	}
+
+	// incentive = 1e18/lltv - 1e18
+	incentive := new(big.Int).Sub(
+		new(big.Int).Div(E18, h.MarketMap[pos.MarketID].LLTV), // 1e18 / lltv
+		E18, // - 1e18
+	)
+
+	if incentive.Cmp(MAX_INCENTIVE) > 0 {
+		incentive = MAX_INCENTIVE
+	}
+
+	/*
+		// étape 1 : convertir le collateral en loanToken
+		collateralInLoan = collateral * oraclePrice / 1e36
+
+		// étape 2 : diviser par (1 + incentive) pour trouver la dette remboursable
+		maxRepaid = collateralInLoan / (1 + incentive)
+				  = collateralInLoan * 1e18 / (1e18 + incentive)
+
+	*/
+	maxRepaid := new(big.Int).Div(
+		new(big.Int).Mul(
+			new(big.Int).Mul(&collateralAssets, TenPowInt(36)),
+			E18,
+		),
+		new(big.Int).Mul(&oraclePrice, new(big.Int).Add(E18, incentive)),
+	)
+
+	// on ne peut pas rembourser plus que la dette totale
+	repaidDebt := borrowAssets
+	if maxRepaid.Cmp(borrowAssets) < 0 {
+		repaidDebt = maxRepaid
+	}
+
+	// seizedValue = (repaidDebt * oraclePrice / 1e36) * (1e18 + incentive) / 1e18
+	seizedValue := new(big.Int).Div(
+		new(big.Int).Mul(
+			new(big.Int).Div(new(big.Int).Mul(repaidDebt, &oraclePrice), TenPowInt(36)),
+			new(big.Int).Add(E18, incentive),
+		),
+		E18,
+	)
+	// profit = collatéral saisi - dette remboursée
+	profit := new(big.Int).Sub(seizedValue, repaidDebt)
+
+	return HealthFactorLLTVScaled(hf, h.MarketMap[pos.MarketID].LLTV), profit, nil
+
+}
+
+/*
+seizedCollateral = repaidDebt * oraclePrice / 1e36 * (1e18 + incentive) / 1e18
+
+La liquidation est valide tant que :
+seizedCollateral <= collateralAssets  // tu ne peux pas saisir plus que le collatéral dispo
+
+*/

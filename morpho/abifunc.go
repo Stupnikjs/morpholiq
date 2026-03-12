@@ -23,4 +23,6 @@ var (
 		"idToMarketParams(bytes32)",
 		"address,address,address,address,uint256",
 	)
+
+	OraclePriceFunc = w3.MustNewFunc("price()", "uint256")
 )
