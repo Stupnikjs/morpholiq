@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"maps"
 	"math/big"
+	"sync/atomic"
 
 	"github.com/lmittmann/w3"
 	"github.com/lmittmann/w3/module/eth"
@@ -11,9 +12,21 @@ import (
 
 var E18 *big.Int = new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
 
-// init
+type HFManager struct {
+	MarketMap MarketMap
+	LLTVmap   map[[32]byte]*big.Int
+	HFMap     atomic.Pointer[map[BorrowPosition]*big.Int]
+}
 
-// lecture
+// scaled by 10e6
+type HFparams struct {
+	borrowAssets, collateralAssets               *big.Int
+	borrowAssetsUSD, collateralAssetsUSD         *big.Int
+	borrowAssetDecimals, collateralAssetDecimals uint16
+}
+
+type MarketMap map[[32]byte]MorphoMarketParams
+
 func (e *MorphoEngine) NewHFManager() *HFManager {
 	hfIndex := e.BuildHFIndex()
 	manager := HFManager{}
