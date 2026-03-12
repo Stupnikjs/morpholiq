@@ -2,8 +2,6 @@ package morpho
 
 import (
 	"math/big"
-
-	"github.com/ethereum/go-ethereum/common"
 )
 
 var E18 *big.Int = new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
@@ -35,8 +33,8 @@ func HealthFactorLLTVScaled(hf, lltv *big.Int) *big.Int {
 	)
 }
 
-func (h *HFManager) GetLiquidable(lltv *big.Int) []common.Address {
-	liquidable := []common.Address{}
+func (h *HFManager) GetLiquidable() []BorrowPosition {
+	liquidable := []BorrowPosition{}
 	threshold := big.NewInt(1_000_000) // 1.0 × 1e6
 
 	for k, v := range h.HFMap {
@@ -46,13 +44,16 @@ func (h *HFManager) GetLiquidable(lltv *big.Int) []common.Address {
 		if v.Cmp(threshold) < 0 {
 			continue // bad debt (collateral < borrow)
 		}
-		hfLltv := HealthFactorLLTVScaled(v, lltv)
+
+		hfLltv := HealthFactorLLTVScaled(v, h.LLTVmap[k.MarketID])
 		if hfLltv == nil || hfLltv.Sign() == 0 {
 			continue
 		}
+
 		if hfLltv.Cmp(threshold) < 0 {
-			liquidable = append(liquidable, k.Address) // ✅ liquidable rentable
+			liquidable = append(liquidable, k) // ✅ liquidable rentable
 		}
 	}
+	// a partir de toutes les addresses on recalcule les HF onchain
 	return liquidable
 }

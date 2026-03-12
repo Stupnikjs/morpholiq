@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"math/big"
 
 	"github.com/Stupnikjs/morpholiq/morpho"
@@ -25,7 +24,19 @@ func main() {
 		panic(err)
 	}
 
-	m, err := morpho.FetchMarkets()
-	fmt.Println(m[:10])
+	engine := morpho.InitEngine(morpho.Params)
+	err = engine.LoadBorrowerCache(morpho.Params[0])
+	if err != nil {
+		panic(err)
+	}
 
 }
+
+/*
+
+-- Call a l'api morpho pour initier une struct de suivi des liquidations futures // recall toute les 10min
+-- tout les block reactualisation des HF
+-- Si position liquidable ==> simulation de transaction / calcul du slipage ==> estimation des gains potentiels
+-- envoie de la transaction
+
+*/

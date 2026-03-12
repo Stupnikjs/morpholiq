@@ -7,11 +7,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/lmittmann/w3"
 	"github.com/lmittmann/w3/module/eth"
-	"github.com/lmittmann/w3/w3types"
 )
 
 // reel call a la blockchain pour check la position
-func PrintPosition(pos BorrowPosition, client *w3.Client, morphoAddress common.Address, funcPosition w3types.Func, funcMarket w3types.Func) {
+func GetPosition(pos BorrowPosition, client *w3.Client, morphoAddress common.Address) {
 	var (
 		supplyShares      big.Int
 		borrowShares      big.Int
@@ -23,8 +22,8 @@ func PrintPosition(pos BorrowPosition, client *w3.Client, morphoAddress common.A
 	)
 
 	err := client.Call(
-		eth.CallFunc(morphoAddress, funcPosition, pos.MarketID, pos.Address).Returns(&supplyShares, &borrowShares, &collateral),
-		eth.CallFunc(morphoAddress, funcMarket, pos.MarketID).Returns(&totalSupplyAssets, &totalSupplyShares, &totalBorrowAssets, &totalBorrowShares, new(big.Int), new(big.Int)),
+		eth.CallFunc(morphoAddress, PositionFunc, pos.MarketID, pos.Address).Returns(&supplyShares, &borrowShares, &collateral),
+		eth.CallFunc(morphoAddress, MarketFunc, pos.MarketID).Returns(&totalSupplyAssets, &totalSupplyShares, &totalBorrowAssets, &totalBorrowShares, new(big.Int), new(big.Int)),
 	)
 	if err != nil {
 		fmt.Println("err:", err)

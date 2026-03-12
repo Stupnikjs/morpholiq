@@ -33,6 +33,12 @@ type BorrowPosition struct {
 	Address  common.Address
 }
 
+type LiquidablePos struct {
+	BorrowPosition
+	BorrowAssets    *big.Int
+	CollateralAsset *big.Int
+}
+
 type MorphoMarketParams struct {
 	ID                      [32]byte
 	ChainID                 uint32
@@ -46,7 +52,8 @@ type MorphoMarketParams struct {
 }
 
 type HFManager struct {
-	HFMap map[BorrowPosition]*big.Int
+	LLTVmap map[[32]byte]*big.Int
+	HFMap   map[BorrowPosition]*big.Int
 }
 
 // scaled by 10e6

@@ -8,14 +8,18 @@ import (
 	"math/big"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 )
 
-func NewMorphoEngine(params []MorphoMarketParams) *MorphoEngine {
+func InitEngine(params []MorphoMarketParams) *MorphoEngine {
 	engine := &MorphoEngine{}
 	initialMap := make(map[[32]byte]MarketState, len(params))
 	engine.snapshot.Store(&initialMap)
+	for _, p := range params {
+		engine.LoadBorrowerCache(p)
+	}
 	return engine
 }
 
@@ -90,15 +94,17 @@ func (b *MorphoEngine) LoadBorrowerCache(param MorphoMarketParams) error {
 		}
 
 	}
-	old := b.snapshot.Load()
-	newMap := make(map[[32]byte]MarketState, len(*old)+1)
-	maps.Copy(newMap, *old)
-	newMap[param.ID] = marketState
-	swapped := b.snapshot.CompareAndSwap(old, &newMap)
-	if swapped {
-		return nil
+	for {
+		old := b.snapshot.Load()
+		newMap := make(map[[32]byte]MarketState, len(*old)+1)
+		maps.Copy(newMap, *old)
+		newMap[param.ID] = marketState
+		swapped := b.snapshot.CompareAndSwap(old, &newMap)
+		if swapped {
+			return nil
+		}
 	}
-	return fmt.Errorf("swap failed ")
+
 }
 
 func (e *MorphoEngine) Get(marketID [32]byte) MarketState {
@@ -157,5 +163,31 @@ func (e *MorphoEngine) DebugPosition(addr common.Address) {
 		fmt.Printf("collateralAssets: %s\n", v.CollateralAssets.String())
 		fmt.Printf("borrowAssets:     %s\n", v.BorrowAssets.String())
 		fmt.Printf("lltv:             %s\n", v.LLTV.String())
+	}
+}
+
+func (e *MorphoEngine) Scanner(markets []MorphoMarketParams) error {
+	snap := e.snapshot.Load()
+	manager := HFManager{
+		HFMap: e.BuildHFIndex(),
+	}
+	if snap == nil {
+		return fmt.Errorf("Engine must be initiallized")
+	}
+	for {
+		// only every 5 min
+		go func() {
+			time.Sleep(5 * time.Minute)
+			for _, p := range markets {
+				e.LoadBorrowerCache(p)
+			}
+
+		}()
+		_ = manager
+		// recupere les liquidables ou futur liquidables
+		// liquidable := manager.GetLiquidable()
+		// estimer tout les liquidables
+		// onchainHF => EstimateProfit()
+
 	}
 }
