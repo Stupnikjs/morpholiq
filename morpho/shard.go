@@ -1,4 +1,4 @@
-package main
+package morpho
 
 import (
 	"hash/fnv"
@@ -9,28 +9,37 @@ const numShards = 256
 
 type Shard struct {
 	mu        sync.RWMutex
-	positions map[string]HFparams // key = borrower address
-	_         [56]byte            // padding anti cache-line contention
+	positions map[string]*BorrowPosition // key = borrower address
+	_         [56]byte                   // padding anti cache-line contention
 }
 
 type PositionStore struct {
 	shards [numShards]Shard
 }
 
+func NewPositionStore() *PositionStore {
+	s := &PositionStore{}
+	for i := range s.shards {
+		s.shards[i].positions = make(map[string]*BorrowPosition)
+	}
+	return s
+}
+
 func (s *PositionStore) shard(addr string) *Shard {
+	// hash
 	h := fnv.New32a()
 	h.Write([]byte(addr))
 	return &s.shards[h.Sum32()%numShards]
 }
 
-func (s *PositionStore) Set(addr string, p HFparams) {
+func (s *PositionStore) Set(addr string, p *BorrowPosition) {
 	sh := s.shard(addr)
 	sh.mu.Lock()
 	sh.positions[addr] = p
 	sh.mu.Unlock()
 }
 
-func (s *PositionStore) Get(addr string) (HFparams, bool) {
+func (s *PositionStore) Get(addr string) (*BorrowPosition, bool) {
 	sh := s.shard(addr)
 	sh.mu.RLock()
 	p, ok := sh.positions[addr]

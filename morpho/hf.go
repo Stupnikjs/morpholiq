@@ -26,13 +26,6 @@ type HFparams struct {
 
 type MarketMap map[[32]byte]MorphoMarketParams
 
-func (e *MorphoEngine) NewHFManager() *HFManager {
-	hfIndex := e.BuildHFIndex()
-	manager := HFManager{}
-	manager.HFMap.Store(&hfIndex)
-	return &manager
-}
-
 func (h *HFManager) GetHF(pos BorrowPosition) *big.Int {
 	return (*h.HFMap.Load())[pos]
 }

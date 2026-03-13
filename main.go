@@ -12,7 +12,7 @@ import (
 
 func main() {
 	// Connexion au noeud Ethereum (remplace par ton RPC)
-	client, err := w3.Dial(morpho.PubRPC)
+	client, err := w3.Dial(morpho.BASEDRPC)
 	if err != nil {
 		panic(err)
 	}
@@ -25,10 +25,13 @@ func main() {
 		panic(err)
 	}
 
-	//engine := morpho.InitEngine(morpho.Params)
-	fmt.Println(morpho.FetchMarkets())
+	scanner := morpho.NewScanner(client, morpho.BaseParams)
+	err = scanner.Refresh()
+	fmt.Println(scanner.WatchList)
 	//engine.Scanner(client, morpho.Params)
-
+	if err != nil {
+		panic(err)
+	}
 }
 
 /*

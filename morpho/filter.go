@@ -18,9 +18,10 @@ type MorphoApiCaller struct {
 }
 
 type BorrowPosition struct {
-	MarketID [32]byte
-	Address  common.Address
-	HfApi    *big.Int
+	MarketID  [32]byte
+	Address   common.Address
+	HfApi     *big.Int
+	HfOnChain *big.Int
 }
 
 type MorphoMarketParams struct {
@@ -35,15 +36,20 @@ type MorphoMarketParams struct {
 	CollateralTokenDecimals uint16
 }
 
-func (m *MorphoApiCaller) FecthHotPosition() ([]BorrowPosition, error) {
+func (m *MorphoApiCaller) FecthHotPosition(n int) ([]BorrowPosition, error) {
 	FilteredPos := []BorrowPosition{}
 	for _, m := range m.Markets {
 		fetched, err := FecthBorrowersFromMarket(m)
 		if err != nil {
 			return nil, err
 		}
+
 		FilteredPos = append(FilteredPos, fetched...)
+		if len(FilteredPos) > n {
+			return FilteredPos, err // CHANGER CETTE LIGNE POUR AFFINER LE FILTRE
+		}
 	}
+
 	return FilteredPos, nil
 }
 
