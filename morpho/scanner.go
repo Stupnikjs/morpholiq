@@ -5,8 +5,8 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/lmittmann/w3"
-	"github.com/lmittmann/w3/module/eth"
 )
 
 type Scanner struct {
@@ -59,36 +59,20 @@ func (e *Scanner) Scan() error {
 
 // changer cette func pour update la borrowPosition
 func (e *Scanner) OnChainCalc(pos BorrowPosition) (*big.Int, *big.Int, error) {
-	var (
-		supplyShares      big.Int
-		borrowShares      big.Int
-		collateralAssets  big.Int
-		totalSupplyAssets big.Int
-		totalSupplyShares big.Int
-		totalBorrowAssets big.Int
-		totalBorrowShares big.Int
-		oraclePrice       big.Int
-	)
-	// get oracle for price by marketID
-
-	err := e.Client.Call(
-		eth.CallFunc(MorphoMain, PositionFunc, pos.MarketID, pos.Address).Returns(&supplyShares, &borrowShares, &collateralAssets),
-		eth.CallFunc(MorphoMain, MarketFunc, pos.MarketID).Returns(&totalSupplyAssets, &totalSupplyShares, &totalBorrowAssets, &totalBorrowShares, new(big.Int), new(big.Int)),
-		eth.CallFunc(h.MarketMap[pos.MarketID].Oracle, OraclePriceFunc).Returns(&oraclePrice),
-	)
+	oracleAddress := common.HexToAddress("")
+	p, err := e.GetsPosParams(&pos, oracleAddress)
 	if err != nil {
-		fmt.Println("err:", err)
-		return nil, nil, err
+		fmt.Println(err)
 	}
 	threshold := big.NewInt(1_000_000)
 	borrowAssets := new(big.Int).Div(
 		new(big.Int).Mul(
-			&borrowShares,
-			new(big.Int).Add(&totalBorrowAssets, big.NewInt(1)),
+			&p.borrowShares,
+			new(big.Int).Add(&p.totalBorrowAssets, big.NewInt(1)),
 		),
-		new(big.Int).Add(&totalBorrowShares, big.NewInt(1_000_000)),
+		new(big.Int).Add(&p.totalBorrowShares, big.NewInt(1_000_000)),
 	)
-	hf := HealthFactorOraclePrice(&oraclePrice, borrowAssets, &collateralAssets)
+	hf := HealthFactorOraclePrice(&p.oraclePrice, borrowAssets, &p.collateralAssets)
 	if hf.Cmp(threshold) < 0 {
 		return hf, nil, nil
 	}
@@ -107,7 +91,7 @@ func (e *Scanner) OnChainCalc(pos BorrowPosition) (*big.Int, *big.Int, error) {
 	}
 
 	collateralInLoan := new(big.Int).Div(
-		new(big.Int).Mul(&collateralAssets, &oraclePrice),
+		new(big.Int).Mul(&p.collateralAssets, &p.oraclePrice),
 		TenPowInt(36),
 	)
 

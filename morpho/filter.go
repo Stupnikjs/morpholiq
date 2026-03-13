@@ -24,6 +24,10 @@ type BorrowPosition struct {
 	HfOnChain *big.Int
 }
 
+type ApiPosition struct {
+	borrowAssets, borrowAssetsUSD, collateralAssets, collateralAssetsUSD, LLTV *big.Int
+}
+
 type MorphoMarketParams struct {
 	ID                      [32]byte
 	ChainID                 uint32
@@ -112,7 +116,7 @@ func FecthBorrowersFromMarket(param MorphoMarketParams) ([]BorrowPosition, error
 			continue
 		}
 
-		p := HFparams{
+		p := ApiPosition{
 			borrowAssets:        ParseBigInt(item.State.BorrowAssets.String()),
 			borrowAssetsUSD:     ParseBigInt(item.State.BorrowAssetsUsd.String()),
 			collateralAssets:    ParseBigInt(item.State.Collateral.String()),
