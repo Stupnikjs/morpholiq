@@ -19,6 +19,8 @@ type OnChainPosition struct {
 	oraclePrice       big.Int
 }
 
+
+// refactor pour faire un gros batch avec les / // pos par market 
 func (e *Scanner) GetsPosParams(bor *BorrowPosition, oracleAddress common.Address) (*OnChainPosition, error) {
 	p := OnChainPosition{}
 	err := e.Client.Call(
