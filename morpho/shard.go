@@ -46,3 +46,19 @@ func (s *PositionStore) Get(addr string) (*BorrowPosition, bool) {
 	sh.mu.RUnlock()
 	return p, ok
 }
+
+func (s *PositionStore) ForEach(fn func(addr string, p *BorrowPosition)) {
+	var wg sync.WaitGroup
+	for i := range s.shards {
+		wg.Add(1)
+		go func(sh *Shard) {
+			defer wg.Done()
+			sh.mu.RLock()
+			for addr, p := range sh.positions {
+				fn(addr, p)
+			}
+			sh.mu.RUnlock()
+		}(&s.shards[i])
+	}
+	wg.Wait()
+}
