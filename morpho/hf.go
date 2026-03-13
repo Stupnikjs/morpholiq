@@ -20,9 +20,8 @@ type HFManager struct {
 
 // scaled by 10e6
 type HFparams struct {
-	borrowAssets, collateralAssets               *big.Int
-	borrowAssetsUSD, collateralAssetsUSD         *big.Int
-	borrowAssetDecimals, collateralAssetDecimals uint16
+	borrowAssets, collateralAssets, borrowAssetsUSD, collateralAssetsUSD, LLTV *big.Int
+	borrowAssetDecimals, collateralAssetDecimals                               uint16
 }
 
 type MarketMap map[[32]byte]MorphoMarketParams
