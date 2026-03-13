@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/lmittmann/w3/module/eth"
 )
 
@@ -19,15 +18,20 @@ type OnChainPosition struct {
 	oraclePrice       big.Int
 }
 
-
-// refactor pour faire un gros batch avec les / // pos par market 
-func (e *Scanner) GetsPosParams(bor *BorrowPosition, oracleAddress common.Address) (*OnChainPosition, error) {
-	p := OnChainPosition{}
-	err := e.Client.Call(
-		eth.CallFunc(MorphoMain, PositionFunc, bor.MarketID, bor.Address).Returns(&p.supplyShares, &p.borrowShares, &p.collateralAssets),
-		eth.CallFunc(MorphoMain, MarketFunc, bor.MarketID).Returns(&p.totalSupplyAssets, &p.totalSupplyShares, &p.totalBorrowAssets, &p.totalBorrowShares, new(big.Int), new(big.Int)),
-		eth.CallFunc(oracleAddress, OraclePriceFunc).Returns(&p.oraclePrice),
-	)
+// refactor pour faire un gros batch avec les / // pos par market
+func (e *Scanner) OnChainBatch() error {
+	calls := []eth.CallFunc{}
+	for _, sh := range e.WatchList.shards {
+		for _, p := range sh.positions {
+			pos := OnChainPosition{}
+			calls = append(calls, []eth.CallFunc{
+				eth.CallFunc(MorphoMain, PositionFunc, bor.MarketID, bor.Address).Returns(&p.supplyShares, &p.borrowShares, &p.collateralAssets),
+				eth.CallFunc(MorphoMain, MarketFunc, bor.MarketID).Returns(&p.totalSupplyAssets, &p.totalSupplyShares, &p.totalBorrowAssets, &p.totalBorrowShares, new(big.Int), new(big.Int)),
+				eth.CallFunc(oracleAddress, OraclePriceFunc).Returns(&p.oraclePrice),
+			})
+		}
+	}
+	err := e.Client.Call()
 	if err != nil {
 		fmt.Println("err:", err)
 		return nil, err
