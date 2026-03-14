@@ -25,3 +25,22 @@ func UpdatePosition(newPos){
 
 
 }
+
+
+// subscribe au log 
+
+logsChan := make(chan types.Log, 100)
+
+// Filtre sur le contrat Morpho
+filter := ethereum.FilterQuery{
+    Addresses: []common.Address{MorphoMain},
+}
+
+sub, err := client.Subscribe(
+    eth.LogsHandler(filter, func(log types.Log) {
+        logsChan <- log
+    }),
+)
+if err != nil {
+    log.Fatal(err)
+}
