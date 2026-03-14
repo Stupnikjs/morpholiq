@@ -8,9 +8,10 @@ import (
 )
 
 var (
-	DRPC     = "https://lb.drpc.live/ethereum/AhuxMhCqfkI8pF_0y4Fpi89GWcIMFIwR8ZsatuZZzRRv"
-	BASEDRPC = "https://lb.drpc.live/base/AhuxMhCqfkI8pF_0y4Fpi89GWcIMFIwR8ZsatuZZzRRv"
-	PubRPC   = "https://ethereum-rpc.publicnode.com"
+	DRPC       = "https://lb.drpc.live/ethereum/AhuxMhCqfkI8pF_0y4Fpi89GWcIMFIwR8ZsatuZZzRRv"
+	BASEDRPC   = "https://lb.drpc.live/base/AhuxMhCqfkI8pF_0y4Fpi89GWcIMFIwR8ZsatuZZzRRv"
+	BASEDRPCWS = "wss://lb.drpc.live/ethereum/AhuxMhCqfkI8pF_0y4Fpi89GWcIMFIwR8ZsatuZZzRRv"
+	PubRPC     = "https://ethereum-rpc.publicnode.com"
 	// wstETH (collateral) / USDC (loan) — LLTV 86% — un des marchés les plus actifs
 	TestMarketID = [32]byte(
 		common.HexToHash("0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc"),

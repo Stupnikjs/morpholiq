@@ -17,15 +17,14 @@ type MorphoApiCaller struct {
 	// lecture sans lock, zéro contention
 }
 
-type BorrowPosition struct {
-	MarketID  [32]byte
-	Address   common.Address
-	HfApi     *big.Int
-	HfOnChain *big.Int
+type PositionCache struct {
+	m map[[32]byte]map[common.Address]*BorrowPosition
 }
 
-type ApiPosition struct {
-	borrowAssets, borrowAssetsUSD, collateralAssets, collateralAssetsUSD, LLTV *big.Int
+type BorrowPosition struct {
+	MarketID                                                                       [32]byte
+	Address                                                                        common.Address
+	BorrowAssets, BorrowAssetsUSD, CollateralAssets, CollateralAssetsUSD, LLTV, Hf *big.Int
 }
 
 type MorphoMarketParams struct {
@@ -116,31 +115,28 @@ func FecthBorrowersFromMarket(param MorphoMarketParams) ([]BorrowPosition, error
 			continue
 		}
 
-		p := ApiPosition{
-			borrowAssets:        ParseBigInt(item.State.BorrowAssets.String()),
-			borrowAssetsUSD:     ParseBigInt(item.State.BorrowAssetsUsd.String()),
-			collateralAssets:    ParseBigInt(item.State.Collateral.String()),
-			collateralAssetsUSD: ParseBigInt(item.State.CollateralAssetsUsd.String()),
+		p := BorrowPosition{
+			BorrowAssets:        ParseBigInt(item.State.BorrowAssets.String()),
+			BorrowAssetsUSD:     ParseBigInt(item.State.BorrowAssetsUsd.String()),
+			CollateralAssets:    ParseBigInt(item.State.Collateral.String()),
+			CollateralAssetsUSD: ParseBigInt(item.State.CollateralAssetsUsd.String()),
 			LLTV:                ParseBigInt(item.Market.LLTV.String()),
 		}
-		hf, in, err := ApplyFilter(p)
+		p.Address = common.HexToAddress(item.User.Address)
+		in, err := p.ApplyFilter()
 		_ = in
 		if err != nil {
 			return nil, err
 		}
 		if in {
-			FilteredPos = append(FilteredPos, BorrowPosition{
-				HfApi:    hf,
-				Address:  common.HexToAddress(item.User.Address),
-				MarketID: param.ID,
-			})
+			FilteredPos = append(FilteredPos, p)
 
 		}
 	}
 	return FilteredPos, nil
 }
 
-func ApplyFilter(p HFparams) (*big.Int, bool, error) {
-	hf := HealthFactorUSD(p)
-	return hf, true, nil
+func (p *BorrowPosition) ApplyFilter() (bool, error) {
+	p.Hf = HealthFactorUSD(p)
+	return true, nil
 }

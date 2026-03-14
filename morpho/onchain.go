@@ -1,10 +1,7 @@
 package morpho
 
 import (
-	"fmt"
 	"math/big"
-
-	"github.com/lmittmann/w3/module/eth"
 )
 
 type OnChainPosition struct {
@@ -19,6 +16,7 @@ type OnChainPosition struct {
 }
 
 // refactor pour faire un gros batch avec les / // pos par market
+/*
 func (e *Scanner) OnChainBatch() error {
 	calls := []eth.CallFunc{}
 	for _, sh := range e.WatchList.shards {
@@ -40,21 +38,23 @@ func (e *Scanner) OnChainBatch() error {
 }
 
 // scaled by 10e6
-func HealthFactorUSD(p *ApiPosition) *big.Int {
-	if p.borrowAssets == nil || p.borrowAssets.Sign() == 0 ||
-		p.borrowAssetsUSD == nil || p.borrowAssetsUSD.Sign() == 0 {
+func (p *BorrowPosition) HealthFactorUSD() *big.Int {
+	if p.BorrowAssets == nil || p.BorrowAssets.Sign() == 0 ||
+		p.BorrowAssetsUSD == nil || p.BorrowAssetsUSD.Sign() == 0 {
 		return nil
 	}
 
-	if p.collateralAssets == nil || p.collateralAssetsUSD == nil ||
-		p.collateralAssets.Sign() == 0 || p.collateralAssetsUSD.Sign() == 0 {
+	if p.CollateralAssets == nil || p.CollateralAssetsUSD == nil ||
+		p.CollateralAssets.Sign() == 0 || p.CollateralAssetsUSD.Sign() == 0 {
 		return nil
 	}
 
-	num := new(big.Int).Mul(p.collateralAssetsUSD, TenPowInt(6))
-	return new(big.Int).Quo(num, p.borrowAssetsUSD)
+	num := new(big.Int).Mul(p.CollateralAssetsUSD, TenPowInt(6))
+	return new(big.Int).Quo(num, p.BorrowAssetsUSD)
 
 }
+
+*/
 
 // oracle_price c'est le prix du collateral en loan token
 func HealthFactorOraclePrice(oraclePrice, borrowAssets, collateralAssets *big.Int) *big.Int {

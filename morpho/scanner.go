@@ -1,38 +1,85 @@
 package morpho
 
 import (
-	"fmt"
-	"math/big"
+	"context"
 	"time"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/lmittmann/w3"
+	"github.com/lmittmann/w3/module/eth"
 )
 
 type Scanner struct {
 	ClientHttp    *w3.Client
- ClientWs.   *w3.Client
-	ApiCaller *MorphoApiCaller
-	WatchList PositionStore
+	ClientWs      *w3.Client
+	ApiCaller     *MorphoApiCaller
+	PositionCache *PositionCache
+	oracleCh      chan *types.Log
+	positionCh    chan *types.Log
 }
 
-func NewScanner(client *w3.Client, markets []MorphoMarketParams) *Scanner {
+func NewScanner(markets []MorphoMarketParams) *Scanner {
+	client, err := w3.Dial(BASEDRPC)
 
+	if err != nil {
+		panic(err)
+	}
+	clientWs, err := w3.Dial(BASEDRPCWS)
 	return &Scanner{
-		Client:    client,
-		ApiCaller: &MorphoApiCaller{Markets: markets},
-		WatchList: *NewPositionStore(),
+		ClientHttp:    client,
+		ClientWs:      clientWs,
+		ApiCaller:     &MorphoApiCaller{Markets: markets},
+		PositionCache: NewPositionCache(markets),
+		oracleCh:      make(chan *types.Log, 100),
+		positionCh:    make(chan *types.Log, 100),
 	}
 }
 
-func (e *Scanner) Refresh() error {
+func NewPositionCache(markets []MorphoMarketParams) *PositionCache {
+	bigMap := make(map[[32]byte]map[common.Address]*BorrowPosition, len(markets))
+	for _, m := range markets {
+		bigMap[m.ID] = make(map[common.Address]*BorrowPosition)
+	}
+	return &PositionCache{
+		m: bigMap,
+	}
+}
+
+// watchOraclePrices écoute les UpdatedPriceData (ou AnswerUpdated selon ton oracle)
+func (e *Scanner) watchOraclePrices(ctx context.Context) {
+	query := ethereum.FilterQuery{
+		Addresses: []common.Address{ORACLE_ADDRESS},
+		Topics:    [][]common.Hash{{ORACLE_PRICE_UPDATED_TOPIC}},
+	}
+
+	sub, err := e.ClientWs.Subscribe(eth.NewLogs(e.oracleCh, query))
+	if err != nil {
+		panic(err)
+	}
+
+	for {
+		select {
+		case err := <-sub.Err():
+			// reconnexion ou log d'erreur
+			_ = err
+			return
+		case log := <-e.oracleCh:
+			e.oracleCh <- log
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (e *Scanner) ApiCall() error {
 	bp, err := e.ApiCaller.FecthHotPosition(10)
-	fmt.Println(len(bp))
 	if err != nil {
 		return err
 	}
 	for _, p := range bp {
-		e.WatchList.Set(p.Address.String(), &p)
+		e.WatchList.m[p.MarketID][p.Address] = &p
 	}
 	return nil
 
@@ -51,14 +98,13 @@ func (e *Scanner) Scan() error {
 	for {
 		time.Sleep(1 * time.Second)
 
-		e.WatchList.ForEach()
-		// estimer tout les liquidables
-		// onchainHF => EstimateProfit()
+		// listen changement de prix Oracle ou Event position
 
 	}
 }
 
 // changer cette func pour update la borrowPosition
+/*
 func (e *Scanner) OnChainCalc(pos BorrowPosition) (*big.Int, *big.Int, error) {
 	oracleAddress := common.HexToAddress("")
 	p, err := e.GetsPosParams(&pos, oracleAddress)
@@ -124,3 +170,5 @@ func (e *Scanner) OnChainCalc(pos BorrowPosition) (*big.Int, *big.Int, error) {
 	return HealthFactorLLTVScaled(hf, h.MarketMap[pos.MarketID].LLTV), profit, nil
 
 }
+
+*/
