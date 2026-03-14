@@ -2,6 +2,7 @@ package morpho
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -14,7 +15,7 @@ import (
 type Scanner struct {
 	ClientHttp    *w3.Client
 	ClientWs      *w3.Client
-	ApiCaller     *MorphoApiCaller
+	Markets       []MorphoMarketParams
 	PositionCache *PositionCache
 	oracleCh      chan *types.Log
 	positionCh    chan *types.Log
@@ -30,7 +31,7 @@ func NewScanner(markets []MorphoMarketParams) *Scanner {
 	return &Scanner{
 		ClientHttp:    client,
 		ClientWs:      clientWs,
-		ApiCaller:     &MorphoApiCaller{Markets: markets},
+		Markets:       markets,
 		PositionCache: NewPositionCache(markets),
 		oracleCh:      make(chan *types.Log, 100),
 		positionCh:    make(chan *types.Log, 100),
@@ -38,9 +39,14 @@ func NewScanner(markets []MorphoMarketParams) *Scanner {
 }
 
 func NewPositionCache(markets []MorphoMarketParams) *PositionCache {
-	bigMap := make(map[[32]byte]map[common.Address]*BorrowPosition, len(markets))
+	bigMap := make(map[[32]byte]MarketCache, len(markets))
+
 	for _, m := range markets {
-		bigMap[m.ID] = make(map[common.Address]*BorrowPosition)
+		cache := make(map[common.Address]*BorrowPosition)
+		bigMap[m.ID] = MarketCache{
+			Oracle: m.Oracle,
+			C:      cache,
+		}
 	}
 	return &PositionCache{
 		m: bigMap,
@@ -48,7 +54,7 @@ func NewPositionCache(markets []MorphoMarketParams) *PositionCache {
 }
 
 // watchOraclePrices écoute les UpdatedPriceData (ou AnswerUpdated selon ton oracle)
-func (e *Scanner) watchOraclePrices(ctx context.Context) {
+func (e *Scanner) WatchOraclePrices(ctx context.Context) {
 	query := ethereum.FilterQuery{
 		Addresses: []common.Address{ORACLE_ADDRESS},
 		Topics:    [][]common.Hash{{ORACLE_PRICE_UPDATED_TOPIC}},
@@ -73,25 +79,14 @@ func (e *Scanner) watchOraclePrices(ctx context.Context) {
 	}
 }
 
-func (e *Scanner) ApiCall() error {
-	bp, err := e.ApiCaller.FecthHotPosition(10)
-	if err != nil {
-		return err
-	}
-	for _, p := range bp {
-		e.WatchList.m[p.MarketID][p.Address] = &p
-	}
-	return nil
-
-}
-
 func (e *Scanner) Scan() error {
 
 	go func() {
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
 		for range ticker.C {
-			e.Refresh()
+
+			e.RefreshCache(30)
 		}
 	}()
 
@@ -99,7 +94,69 @@ func (e *Scanner) Scan() error {
 		time.Sleep(1 * time.Second)
 
 		// listen changement de prix Oracle ou Event position
+		for o := range e.oracleCh {
+			fmt.Println(o)
+		}
 
+		for ev := range e.positionCh {
+			fmt.Println(ev)
+		}
+	}
+}
+
+func (e *Scanner) WatchOraclePrices(ctx context.Context) {
+	oracleAddresses := make([]common.Address, len(e.Markets))
+	for i, m := range e.Markets {
+		oracleAddresses[i] = m.Oracle
+	}
+
+	query := ethereum.FilterQuery{
+		Addresses: oracleAddresses,
+		Topics:    [][]common.Hash{{ORACLE_PRICE_UPDATED_TOPIC}},
+	}
+
+	// eth.NewLogs pousse directement dans oracleCh — pas besoin de relire
+	sub, err := e.ClientWs.Subscribe(eth.NewLogs(e.oracleCh, query))
+	if err != nil {
+		panic(err)
+	}
+	defer sub.Unsubscribe()
+
+	for {
+		select {
+		case err := <-sub.Err():
+			fmt.Println("oracle sub error:", err)
+			return
+		case <-ctx.Done():
+			return
+			// Ne pas lire oracleCh ici — Scan() s'en charge
+		}
+	}
+}
+
+func (e *Scanner) WatchPositions(ctx context.Context) {
+
+	query := ethereum.FilterQuery{
+		Addresses: []common.Address{MorphoMain},
+		Topics: [][]common.Hash{{
+			EventBorrow.Topic0, EventLiquidate.Topic0, EventRepay.Topic0,
+		}},
+	}
+
+	sub, err := e.ClientWs.Subscribe(eth.NewLogs(e.positionCh, query))
+	if err != nil {
+		panic(err)
+	}
+	defer sub.Unsubscribe()
+
+	for {
+		select {
+		case err := <-sub.Err():
+			fmt.Println("position sub error:", err)
+			return
+		case <-ctx.Done():
+			return
+		}
 	}
 }
 

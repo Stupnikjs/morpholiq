@@ -11,22 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// Prend la stuct de reponse api morpho et retourne une liste d'addresse a suivre onchain
-type MorphoApiCaller struct {
-	Markets []MorphoMarketParams
-	// lecture sans lock, zéro contention
-}
-
-type PositionCache struct {
-	m map[[32]byte]map[common.Address]*BorrowPosition
-}
-
-type BorrowPosition struct {
-	MarketID                                                                       [32]byte
-	Address                                                                        common.Address
-	BorrowAssets, BorrowAssetsUSD, CollateralAssets, CollateralAssetsUSD, LLTV, Hf *big.Int
-}
-
 type MorphoMarketParams struct {
 	ID                      [32]byte
 	ChainID                 uint32
@@ -39,21 +23,42 @@ type MorphoMarketParams struct {
 	CollateralTokenDecimals uint16
 }
 
-func (m *MorphoApiCaller) FecthHotPosition(n int) ([]BorrowPosition, error) {
-	FilteredPos := []BorrowPosition{}
-	for _, m := range m.Markets {
-		fetched, err := FecthBorrowersFromMarket(m)
+// Prend la stuct de reponse api morpho et retourne une liste d'addresse a suivre onchain
+type MorphoApiCaller struct {
+	Markets []MorphoMarketParams
+	// lecture sans lock, zéro contention
+}
+
+type PositionCache struct {
+	m map[[32]byte]MarketCache
+}
+
+type MarketCache struct {
+	Oracle common.Address
+	C      map[common.Address]*BorrowPosition
+}
+
+type BorrowPosition struct {
+	MarketID                                                                       [32]byte
+	Address                                                                        common.Address
+	BorrowAssets, BorrowAssetsUSD, CollateralAssets, CollateralAssetsUSD, LLTV, Hf *big.Int
+}
+
+func (e *Scanner) RefreshCache(n int) error {
+
+	for _, ma := range e.Markets {
+		fetched, err := FecthBorrowersFromMarket(ma)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		FilteredPos = append(FilteredPos, fetched...)
-		if len(FilteredPos) > n {
-			return FilteredPos, err // CHANGER CETTE LIGNE POUR AFFINER LE FILTRE
+		for _, p := range fetched {
+			e.PositionCache.m[ma.ID].C[p.Address] = &p
 		}
+
 	}
 
-	return FilteredPos, nil
+	return nil
 }
 
 func FecthBorrowersFromMarket(param MorphoMarketParams) ([]BorrowPosition, error) {
@@ -123,7 +128,7 @@ func FecthBorrowersFromMarket(param MorphoMarketParams) ([]BorrowPosition, error
 			LLTV:                ParseBigInt(item.Market.LLTV.String()),
 		}
 		p.Address = common.HexToAddress(item.User.Address)
-		in, err := p.ApplyFilter()
+		in, err := p.ApplyFilter(new(big.Int).Div(p.CollateralAssetsUSD, p.BorrowAssetsUSD))
 		_ = in
 		if err != nil {
 			return nil, err
@@ -136,7 +141,17 @@ func FecthBorrowersFromMarket(param MorphoMarketParams) ([]BorrowPosition, error
 	return FilteredPos, nil
 }
 
-func (p *BorrowPosition) ApplyFilter() (bool, error) {
-	p.Hf = HealthFactorUSD(p)
+func (p *BorrowPosition) ApplyFilter(oraclePrice *big.Int) (bool, error) {
+	// changer
+	p.Hf = p.HealthFactorOraclePrice(oraclePrice)
 	return true, nil
+}
+
+func (p *BorrowPosition) HealthFactorOraclePrice(oraclePrice *big.Int) *big.Int {
+	// HF = coll * oracle / borrowassets * oracle scale
+	E36 := new(big.Int).Exp(big.NewInt(10), big.NewInt(36), nil)
+	num := new(big.Int).Mul(p.CollateralAssets, oraclePrice) // collateral * oraclePrice
+	num.Mul(num, TenPowInt(6))                               // × 1e6 pour garder la précision
+	denom := new(big.Int).Mul(p.BorrowAssets, E36)           // borrowAssets * 1e36
+	return new(big.Int).Div(num, denom)
 }

@@ -120,4 +120,9 @@ var (
 	)
 
 	OraclePriceFunc = w3.MustNewFunc("price()", "uint256")
+
+	EventSupply    = w3.MustNewEvent("Supply(bytes32,address,address,uint256,uint256)")
+	EventBorrow    = w3.MustNewEvent("Borrow(bytes32,address,address,uint256,uint256)")
+	EventRepay     = w3.MustNewEvent("Repay(bytes32,address,address,uint256,uint256)")
+	EventLiquidate = w3.MustNewEvent("Liquidate(bytes32,address,address,uint256,uint256,uint256,uint256)")
 )

@@ -75,7 +75,7 @@ func HealthFactorLLTVScaled(hf, lltv *big.Int) *big.Int {
 	}
 	return new(big.Int).Div(
 		new(big.Int).Mul(hf, lltv),
-		E18,
+		TenPowInt(18),
 	)
 
 }
