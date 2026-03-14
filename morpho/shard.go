@@ -1,11 +1,7 @@
 package morpho
 
-import (
-	"hash/fnv"
-	"sync"
-)
 
-const numShards = 256
+
 
 
 type PositionsByMarket struct {
