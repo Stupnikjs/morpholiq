@@ -3,6 +3,7 @@ package morpho
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -28,6 +29,9 @@ func NewScanner(markets []MorphoMarketParams) *Scanner {
 		panic(err)
 	}
 	clientWs, err := w3.Dial(BASEDRPCWS)
+	if err != nil {
+		panic(err)
+	}
 	return &Scanner{
 		ClientHttp:    client,
 		ClientWs:      clientWs,
@@ -44,6 +48,7 @@ func NewPositionCache(markets []MorphoMarketParams) *PositionCache {
 	for _, m := range markets {
 		cache := make(map[common.Address]*BorrowPosition)
 		bigMap[m.ID] = MarketCache{
+			Mu:     sync.Mutex{},
 			Oracle: m.Oracle,
 			C:      cache,
 		}
@@ -53,35 +58,9 @@ func NewPositionCache(markets []MorphoMarketParams) *PositionCache {
 	}
 }
 
-// watchOraclePrices écoute les UpdatedPriceData (ou AnswerUpdated selon ton oracle)
-func (e *Scanner) WatchOraclePrices(ctx context.Context) {
-	query := ethereum.FilterQuery{
-		Addresses: []common.Address{ORACLE_ADDRESS},
-		Topics:    [][]common.Hash{{ORACLE_PRICE_UPDATED_TOPIC}},
-	}
-
-	sub, err := e.ClientWs.Subscribe(eth.NewLogs(e.oracleCh, query))
-	if err != nil {
-		panic(err)
-	}
-
-	for {
-		select {
-		case err := <-sub.Err():
-			// reconnexion ou log d'erreur
-			_ = err
-			return
-		case log := <-e.oracleCh:
-   
-			e.oracleCh <- log
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
 func (e *Scanner) Scan() error {
-
+	e.RefreshCache(30)
+	go e.WatchOraclePrices(context.Background())
 	go func() {
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
@@ -90,49 +69,32 @@ func (e *Scanner) Scan() error {
 			e.RefreshCache(30)
 		}
 	}()
-
 	for {
 		time.Sleep(1 * time.Second)
 
 		// listen changement de prix Oracle ou Event position
-		for o := range e.oracleCh {
-			ProcessOracleChange(o)
+		select {
+		case o := <-e.oracleCh:
+			fmt.Println(o.)
+		case ev := <-e.positionCh:
+			fmt.Println(ev.Topics)
 		}
 
-		for ev := range e.positionCh {
-			ProcessPositionChange(ev)
-		}
 	}
 }
 
 func (e *Scanner) WatchOraclePrices(ctx context.Context) {
-	oracleAddresses := make([]common.Address, len(e.Markets))
-	for i, m := range e.Markets {
-		oracleAddresses[i] = m.Oracle
-	}
-
-	query := ethereum.FilterQuery{
-		Addresses: oracleAddresses,
-		Topics:    [][]common.Hash{{ORACLE_PRICE_UPDATED_TOPIC}},
-	}
-
-	// eth.NewLogs pousse directement dans oracleCh — pas besoin de relire
-	sub, err := e.ClientWs.Subscribe(eth.NewLogs(e.oracleCh, query))
-	if err != nil {
-		panic(err)
-	}
-	defer sub.Unsubscribe()
-
-	for {
-		select {
-		case err := <-sub.Err():
-			fmt.Println("oracle sub error:", err)
-			return
-		case <-ctx.Done():
-			return
-			// Ne pas lire oracleCh ici — Scan() s'en charge
+	// il faut fetch chaque oracle a chaque block
+	// fusionner tout les oracle de tout les market et batch le call 
+	/*
+		oracleAddresses := make([]common.Address, len(e.Markets))
+		for i, m := range e.Markets {
+			oracleAddresses[i] = m.Oracle
 		}
-	}
+	*/
+	
+
+	
 }
 
 func (e *Scanner) WatchPositions(ctx context.Context) {
@@ -154,25 +116,44 @@ func (e *Scanner) WatchPositions(ctx context.Context) {
 		select {
 		case err := <-sub.Err():
 			fmt.Println("position sub error:", err)
-			return
+			sub.Unsubscribe()
+			e.ReconnectWs()
 		case <-ctx.Done():
 			return
 		}
 	}
 }
-func (e *Scanner) reconnectWs() {
-    backoff := 1 * time.Second
-    for {
-        client, err := w3.Dial(BASEDRPCWS)
-        if err == nil {
-            e.ClientWs = client
-            return
-        }
-        fmt.Printf("ws reconnect failed: %v, retry in %s\n", err, backoff)
-        time.Sleep(backoff)
-        backoff = min(backoff*2, 30*time.Second)
-    }
+
+func (e *Scanner) RefreshCache(n int) error {
+
+	for _, ma := range e.Markets {
+		fetched, err := FecthBorrowersFromMarket(ma)
+		if err != nil {
+			return err
+		}
+
+		for _, p := range fetched {
+			e.PositionCache.m[ma.ID].C[p.Address] = &p
+		}
+
+	}
+	return nil
 }
+
+func (e *Scanner) ReconnectWs() {
+	backoff := 1 * time.Second
+	for {
+		client, err := w3.Dial(BASEDRPCWS)
+		if err == nil {
+			e.ClientWs = client
+			return
+		}
+		fmt.Printf("ws reconnect failed: %v, retry in %s\n", err, backoff)
+		time.Sleep(backoff)
+		backoff = min(backoff*2, 30*time.Second)
+	}
+}
+
 // changer cette func pour update la borrowPosition
 /*
 func (e *Scanner) OnChainCalc(pos BorrowPosition) (*big.Int, *big.Int, error) {

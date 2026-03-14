@@ -5,10 +5,34 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 type GraphQLRequest struct {
 	Query string `json:"query"`
+}
+
+type GraphQlResult struct {
+	Data struct {
+		MarketPositions struct {
+			Items []struct {
+				User struct {
+					Address string `json:"address"`
+				} `json:"user"`
+				State struct {
+					BorrowShares        json.Number `json:"borrowShares"`
+					BorrowAssets        json.Number `json:"borrowAssets"`
+					BorrowAssetsUsd     json.Number `json:"borrowAssetsUsd"`
+					Collateral          json.Number `json:"collateral"`
+					CollateralAssetsUsd json.Number `json:"collateralUsd"`
+				} `json:"state"`
+				Market struct {
+					LLTV json.Number `json:"lltv"`
+				}
+			} `json:"items"`
+		} `json:"marketPositions"`
+	} `json:"data"`
 }
 
 type Market struct {
@@ -34,6 +58,25 @@ type Response struct {
 			Items []Market `json:"items"`
 		} `json:"markets"`
 	} `json:"data"`
+}
+
+func ApiRespToBorrowPos(result GraphQlResult) []BorrowPosition {
+	items := result.Data.MarketPositions.Items
+	positions := []BorrowPosition{}
+	for _, i := range items {
+		if i.State.BorrowShares == "0" || i.State.BorrowShares == "" {
+			continue
+		}
+		positions = append(positions, BorrowPosition{
+			Address:             common.HexToAddress(i.User.Address),
+			BorrowAssets:        ParseBigInt(i.State.BorrowAssets.String()),
+			BorrowAssetsUSD:     ParseBigInt(i.State.BorrowAssetsUsd.String()),
+			CollateralAssets:    ParseBigInt(i.State.Collateral.String()),
+			CollateralAssetsUSD: ParseBigInt(i.State.CollateralAssetsUsd.String()),
+			LLTV:                ParseBigInt(i.Market.LLTV.String()),
+		})
+	}
+	return positions
 }
 
 func FetchMarkets() ([]Market, error) {

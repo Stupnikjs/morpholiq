@@ -8,7 +8,7 @@ func main() {
 	// Connexion au noeud Ethereum (remplace par ton RPC)
 
 	scanner := morpho.NewScanner(morpho.BaseParams)
-	_ = scanner
+	scanner.Scan()
 
 }
 
