@@ -17,7 +17,8 @@ type MarketPosition struct {
 
 }
 
-func UpdateMarket(NewOraclePrice) {
-
+func (mp *MarketPosition) UpdateMarket(NewOraclePrice) {
+   for _,p := range mp.position {
+}
 
 }
