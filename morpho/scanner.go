@@ -72,6 +72,7 @@ func (e *Scanner) WatchOraclePrices(ctx context.Context) {
 			_ = err
 			return
 		case log := <-e.oracleCh:
+   
 			e.oracleCh <- log
 		case <-ctx.Done():
 			return
