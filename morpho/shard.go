@@ -1,7 +1,8 @@
 package morpho
 
 
-
+// oracle watch list 
+// listen to event borrowers 
 
 
 type PositionsByMarket struct {
