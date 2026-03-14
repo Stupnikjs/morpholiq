@@ -76,48 +76,7 @@ func (e *Scanner) Scan() error {
 		// listen changement de prix Oracle ou Event position
 
 		log := <-e.positionCh
-		switch log.Topics[0] {
-		case EventAccrueInterest.Topic0:
-			var (
-				id             [32]byte
-				prevBorrowRate big.Int
-				interest       big.Int
-				feeShares      big.Int
-			)
-			err := EventAccrueInterest.DecodeArgs(log, &id, &prevBorrowRate, &interest, &feeShares)
-			if err != nil {
-				fmt.Println("decode error:", err)
-				continue
-			}
-
-			// vérifie si ce market est dans ton cache
-
-			market, ok := e.PositionCache.m[id]
-			if !ok {
-				continue // market pas suivi
-			}
-
-			// récupère le prix oracle du market
-			var price big.Int
-			err = e.ClientHttp.Call(
-				eth.CallFunc(market.Oracle, OraclePriceFunc).Returns(&price),
-			)
-			if err != nil {
-				fmt.Println("price error:", err)
-				continue
-			}
-			fmt.Printf("market %x | rate: %s | interest: %s | oracle price: %s\n", id, &prevBorrowRate, &interest, &price)
-		case EventBorrow.Topic0:
-			b, _ := log.MarshalJSON()
-			fmt.Println(string(b))
-		case EventRepay.Topic0:
-			b, _ := log.MarshalJSON()
-			fmt.Println(string(b))
-		case EventLiquidate.Topic0:
-			b, _ := log.MarshalJSON()
-			fmt.Println(string(b))
-		}
-
+		e.ProcessLog(log)
 	}
 }
 
@@ -188,6 +147,51 @@ func (e *Scanner) ReconnectWs() {
 		time.Sleep(backoff)
 		backoff = min(backoff*2, 30*time.Second)
 	}
+}
+
+func (e *Scanner) ProcessLog(log *types.Log) {
+	switch log.Topics[0] {
+	case EventAccrueInterest.Topic0:
+		var (
+			id             [32]byte
+			prevBorrowRate big.Int
+			interest       big.Int
+			feeShares      big.Int
+		)
+		err := EventAccrueInterest.DecodeArgs(log, &id, &prevBorrowRate, &interest, &feeShares)
+		if err != nil {
+			fmt.Println("decode error:", err)
+
+		}
+
+		// vérifie si ce market est dans ton cache
+
+		market, ok := e.PositionCache.m[id]
+		if !ok {
+			// market pas suivi
+		}
+
+		// récupère le prix oracle du market
+		var price big.Int
+		err = e.ClientHttp.Call(
+			eth.CallFunc(market.Oracle, OraclePriceFunc).Returns(&price),
+		)
+		if err != nil {
+			fmt.Println("price error:", err)
+
+		}
+		fmt.Printf("market %x | rate: %s | interest: %s | oracle price: %s\n", id, &prevBorrowRate, &interest, &price)
+	case EventBorrow.Topic0:
+		b, _ := log.MarshalJSON()
+		fmt.Println(string(b))
+	case EventRepay.Topic0:
+		b, _ := log.MarshalJSON()
+		fmt.Println(string(b))
+	case EventLiquidate.Topic0:
+		b, _ := log.MarshalJSON()
+		fmt.Println(string(b))
+	}
+
 }
 
 // changer cette func pour update la borrowPosition
