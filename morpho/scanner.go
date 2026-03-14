@@ -10,7 +10,8 @@ import (
 )
 
 type Scanner struct {
-	Client    *w3.Client
+	ClientHttp    *w3.Client
+ ClientWs.   *w3.Client
 	ApiCaller *MorphoApiCaller
 	WatchList PositionStore
 }
