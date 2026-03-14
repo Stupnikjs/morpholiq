@@ -102,8 +102,11 @@ var (
 
 	OraclePriceFunc = w3.MustNewFunc("price()", "uint256")
 
-	EventSupply    = w3.MustNewEvent("Supply(bytes32,address,address,uint256,uint256)")
-	EventBorrow    = w3.MustNewEvent("Borrow(bytes32,address,address,uint256,uint256)")
-	EventRepay     = w3.MustNewEvent("Repay(bytes32,address,address,uint256,uint256)")
-	EventLiquidate = w3.MustNewEvent("Liquidate(bytes32,address,address,uint256,uint256,uint256,uint256)")
+	// Borrow a 6 params (caller n'est pas indexé mais est bien là)
+	EventSupply           = w3.MustNewEvent("Supply(bytes32 indexed id,address,address,uint256,uint256)")
+	EventBorrow           = w3.MustNewEvent("Borrow(bytes32 indexed id,address,address,address,uint256,uint256)")
+	EventRepay            = w3.MustNewEvent("Repay(bytes32 indexed id,address,address,uint256,uint256)")
+	EventLiquidate        = w3.MustNewEvent("Liquidate(bytes32 indexed id,address,address,uint256,uint256,uint256,uint256)")
+	EventAccrueInterest   = w3.MustNewEvent("AccrueInterest(bytes32 indexed id,uint256,uint256,uint256)")
+	EventSupplyCollateral = w3.MustNewEvent("SupplyCollateral(bytes32 indexed id,address,address,uint256)")
 )

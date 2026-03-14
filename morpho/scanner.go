@@ -3,6 +3,7 @@ package morpho
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"sync"
 	"time"
 
@@ -60,7 +61,7 @@ func NewPositionCache(markets []MorphoMarketParams) *PositionCache {
 
 func (e *Scanner) Scan() error {
 	e.RefreshCache(30)
-	go e.WatchOraclePrices(context.Background())
+	go e.WatchPositions(context.Background())
 	go func() {
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
@@ -73,11 +74,48 @@ func (e *Scanner) Scan() error {
 		time.Sleep(1 * time.Second)
 
 		// listen changement de prix Oracle ou Event position
-		select {
-		case o := <-e.oracleCh:
-			fmt.Println(o.)
-		case ev := <-e.positionCh:
-			fmt.Println(ev.Topics)
+
+		log := <-e.positionCh
+		switch log.Topics[0] {
+		case EventAccrueInterest.Topic0:
+			var (
+				id             [32]byte
+				prevBorrowRate big.Int
+				interest       big.Int
+				feeShares      big.Int
+			)
+			err := EventAccrueInterest.DecodeArgs(log, &id, &prevBorrowRate, &interest, &feeShares)
+			if err != nil {
+				fmt.Println("decode error:", err)
+				continue
+			}
+
+			// vérifie si ce market est dans ton cache
+
+			market, ok := e.PositionCache.m[id]
+			if !ok {
+				continue // market pas suivi
+			}
+
+			// récupère le prix oracle du market
+			var price big.Int
+			err = e.ClientHttp.Call(
+				eth.CallFunc(market.Oracle, OraclePriceFunc).Returns(&price),
+			)
+			if err != nil {
+				fmt.Println("price error:", err)
+				continue
+			}
+			fmt.Printf("market %x | rate: %s | interest: %s | oracle price: %s\n", id, &prevBorrowRate, &interest, &price)
+		case EventBorrow.Topic0:
+			b, _ := log.MarshalJSON()
+			fmt.Println(string(b))
+		case EventRepay.Topic0:
+			b, _ := log.MarshalJSON()
+			fmt.Println(string(b))
+		case EventLiquidate.Topic0:
+			b, _ := log.MarshalJSON()
+			fmt.Println(string(b))
 		}
 
 	}
@@ -85,16 +123,14 @@ func (e *Scanner) Scan() error {
 
 func (e *Scanner) WatchOraclePrices(ctx context.Context) {
 	// il faut fetch chaque oracle a chaque block
-	// fusionner tout les oracle de tout les market et batch le call 
+	// fusionner tout les oracle de tout les market et batch le call
 	/*
 		oracleAddresses := make([]common.Address, len(e.Markets))
 		for i, m := range e.Markets {
 			oracleAddresses[i] = m.Oracle
 		}
 	*/
-	
 
-	
 }
 
 func (e *Scanner) WatchPositions(ctx context.Context) {
@@ -102,7 +138,7 @@ func (e *Scanner) WatchPositions(ctx context.Context) {
 	query := ethereum.FilterQuery{
 		Addresses: []common.Address{MorphoMain},
 		Topics: [][]common.Hash{{
-			EventBorrow.Topic0, EventLiquidate.Topic0, EventRepay.Topic0,
+			EventBorrow.Topic0, EventLiquidate.Topic0, EventAccrueInterest.Topic0,
 		}},
 	}
 
