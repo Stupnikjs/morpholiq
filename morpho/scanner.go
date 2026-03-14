@@ -160,7 +160,19 @@ func (e *Scanner) WatchPositions(ctx context.Context) {
 		}
 	}
 }
-
+func (e *Scanner) reconnectWs() {
+    backoff := 1 * time.Second
+    for {
+        client, err := w3.Dial(BASEDRPCWS)
+        if err == nil {
+            e.ClientWs = client
+            return
+        }
+        fmt.Printf("ws reconnect failed: %v, retry in %s\n", err, backoff)
+        time.Sleep(backoff)
+        backoff = min(backoff*2, 30*time.Second)
+    }
+}
 // changer cette func pour update la borrowPosition
 /*
 func (e *Scanner) OnChainCalc(pos BorrowPosition) (*big.Int, *big.Int, error) {
