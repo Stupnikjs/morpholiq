@@ -96,11 +96,11 @@ func (e *Scanner) Scan() error {
 
 		// listen changement de prix Oracle ou Event position
 		for o := range e.oracleCh {
-			fmt.Println(o)
+			ProcessOracleChange(o)
 		}
 
 		for ev := range e.positionCh {
-			fmt.Println(ev)
+			ProcessPositionChange(ev)
 		}
 	}
 }
