@@ -34,7 +34,7 @@ type PositionCache struct {
 }
 
 type MarketCache struct {
- Mu wg.Mutex
+ Mu sync.Mutex
 	Oracle common.Address
 	C      map[common.Address]*BorrowPosition
 }
