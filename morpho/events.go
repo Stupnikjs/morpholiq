@@ -48,13 +48,13 @@ func (c *PositionCache) LiquidateEventProcess(log *types.Log) {
 	if !c.IsMarketInCache(id) {
 		return
 	}
-	fmt.Println("Market in cache")
 	market := c.m[id]
 	market.Mu.Lock()
 	if pos, ok := market.C[borrower]; ok {
 		pos.BorrowAssets.Sub(pos.BorrowAssets, &repaidAssets)
 		pos.CollateralAssets.Sub(pos.CollateralAssets, &seizedAssets)
 		if pos.BorrowAssets.Sign() <= 0 {
+			fmt.Printf("Address %s got liquidated \n", pos.Address)
 			delete(market.C, borrower)
 		}
 	}
@@ -80,7 +80,9 @@ func (c *PositionCache) RepayEventProcess(log *types.Log) {
 	if pos, ok := market.C[onBehalf]; ok {
 		pos.BorrowAssets.Sub(pos.BorrowAssets, &assets)
 		if pos.BorrowAssets.Sign() <= 0 {
+			fmt.Printf("Address %s repayed debt \n", pos.Address)
 			delete(market.C, onBehalf)
+
 		}
 	}
 	market.Mu.Unlock()
