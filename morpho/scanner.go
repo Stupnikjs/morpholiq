@@ -88,10 +88,13 @@ func (e *Scanner) WatchOraclePrices(ctx context.Context) {
 		for i, m := range e.Markets {
 			oracleAddresses[i] = m.Oracle
 		}
+  // map marketId oraclePrice 
+  oraclesUpdatedPrice 
 	*/
 
 }
 
+// filtrer seulement les logs qui concernent //nos positions 
 func (e *Scanner) WatchPositions(ctx context.Context) {
 
 	query := ethereum.FilterQuery{
