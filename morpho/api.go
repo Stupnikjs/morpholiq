@@ -2,10 +2,15 @@ package morpho
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
+	"math/big"
 	"net/http"
+	"strings"
 
+	"github.com/Stupnikjs/morpholiq/utils"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -60,23 +65,70 @@ type Response struct {
 	} `json:"data"`
 }
 
-func ApiRespToBorrowPos(result GraphQlResult) []BorrowPosition {
+func ApiRespToBorrowPos(result GraphQlResult, n int) []BorrowPosition {
 	items := result.Data.MarketPositions.Items
 	positions := []BorrowPosition{}
 	for _, i := range items {
 		if i.State.BorrowShares == "0" || i.State.BorrowShares == "" {
 			continue
 		}
-		positions = append(positions, BorrowPosition{
+		p := BorrowPosition{
 			Address:             common.HexToAddress(i.User.Address),
-			BorrowAssets:        ParseBigInt(i.State.BorrowAssets.String()),
-			BorrowAssetsUSD:     ParseBigInt(i.State.BorrowAssetsUsd.String()),
-			CollateralAssets:    ParseBigInt(i.State.Collateral.String()),
-			CollateralAssetsUSD: ParseBigInt(i.State.CollateralAssetsUsd.String()),
-			LLTV:                ParseBigInt(i.Market.LLTV.String()),
-		})
+			BorrowAssets:        utils.ParseBigInt(i.State.BorrowAssets.String()),
+			BorrowAssetsUSD:     utils.ParseBigInt(i.State.BorrowAssetsUsd.String()),
+			CollateralAssets:    utils.ParseBigInt(i.State.Collateral.String()),
+			CollateralAssetsUSD: utils.ParseBigInt(i.State.CollateralAssetsUsd.String()),
+			LLTV:                utils.ParseBigInt(i.Market.LLTV.String()),
+		}
+		collUSDScaled := new(big.Int).Mul(p.CollateralAssetsUSD, utils.TenPowInt(36))
+		oraclePrice := new(big.Int).Div(collUSDScaled, p.BorrowAssetsUSD)
+		hf := HealthFactorOraclePrice(oraclePrice, p.BorrowAssets, p.CollateralAssets)
+		p.Hf = hf
+		if hf.Cmp(utils.TenPowInt(6)) < 0 {
+			continue // bad debt
+		}
+		if hf.Cmp(utils.TenPowInt(7)) > 0 {
+			continue // bad debt
+		}
+		positions = append(positions, p)
 	}
 	return positions
+}
+
+func FecthBorrowersFromMarket(param MorphoMarketParams, n int) ([]BorrowPosition, error) {
+	marketIDstr := "0x" + hex.EncodeToString(param.ID[:])
+
+	query := fmt.Sprintf(`{
+        "query": "{ marketPositions(first: 10000, where: { marketUniqueKey_in: [\"%s\"], chainId_in: [%d] }) 
+		{ items 
+		    { user 
+			     { address } 
+				      state { borrowShares borrowAssets borrowAssetsUsd collateral collateralUsd } 
+					   market { lltv }
+					  } 
+			     } 
+		    }"
+    }`, marketIDstr, uint(param.ChainID))
+
+	resp, err := http.Post(
+		"https://api.morpho.org/graphql",
+		"application/json",
+		strings.NewReader(query),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	var result GraphQlResult
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return ApiRespToBorrowPos(result, n), nil
+
 }
 
 func FetchMarkets() ([]Market, error) {

@@ -12,12 +12,14 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/lmittmann/w3"
 	"github.com/lmittmann/w3/module/eth"
+	"github.com/lmittmann/w3/w3types"
 )
 
 type Scanner struct {
 	ClientHttp    *w3.Client
 	ClientWs      *w3.Client
 	Markets       []MorphoMarketParams
+	OracleCache   *OracleCache
 	PositionCache *PositionCache
 	oracleCh      chan *types.Log
 	positionCh    chan *types.Log
@@ -37,6 +39,7 @@ func NewScanner(markets []MorphoMarketParams) *Scanner {
 		ClientHttp:    client,
 		ClientWs:      clientWs,
 		Markets:       markets,
+		OracleCache:   NewOracleCache(markets),
 		PositionCache: NewPositionCache(markets),
 		oracleCh:      make(chan *types.Log, 100),
 		positionCh:    make(chan *types.Log, 100),
@@ -44,11 +47,11 @@ func NewScanner(markets []MorphoMarketParams) *Scanner {
 }
 
 func NewPositionCache(markets []MorphoMarketParams) *PositionCache {
-	bigMap := make(map[[32]byte]MarketCache, len(markets))
+	bigMap := make(map[[32]byte]*MarketCache, len(markets))
 
 	for _, m := range markets {
 		cache := make(map[common.Address]*BorrowPosition)
-		bigMap[m.ID] = MarketCache{
+		bigMap[m.ID] = &MarketCache{
 			Mu:     sync.Mutex{},
 			Oracle: m.Oracle,
 			C:      cache,
@@ -62,11 +65,11 @@ func NewPositionCache(markets []MorphoMarketParams) *PositionCache {
 func (e *Scanner) Scan() error {
 	e.RefreshCache(30)
 	go e.WatchPositions(context.Background())
+	go e.WatchOraclePrices(context.Background())
 	go func() {
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
 		for range ticker.C {
-
 			e.RefreshCache(30)
 		}
 	}()
@@ -77,24 +80,49 @@ func (e *Scanner) Scan() error {
 
 		log := <-e.positionCh
 		e.ProcessLog(log)
+
 	}
 }
 
-func (e *Scanner) WatchOraclePrices(ctx context.Context) {
-	// il faut fetch chaque oracle a chaque block
-	// fusionner tout les oracle de tout les market et batch le call
-	/*
-		oracleAddresses := make([]common.Address, len(e.Markets))
-		for i, m := range e.Markets {
-			oracleAddresses[i] = m.Oracle
+func (e *Scanner) WatchOraclePrices(ctx context.Context) error {
+	seen := make(map[common.Address]struct{})
+	var oracles []common.Address
+	for _, m := range e.Markets {
+		if _, ok := seen[m.Oracle]; !ok {
+			seen[m.Oracle] = struct{}{}
+			oracles = append(oracles, m.Oracle)
 		}
-  // map marketId oraclePrice 
-  oraclesUpdatedPrice 
-	*/
+	}
 
+	prices := make([]*big.Int, len(oracles))
+	for i := range prices {
+		prices[i] = new(big.Int)
+	}
+
+	// w3 batch : tous les calls partent en une seule requête JSON-RPC
+	calls := make([]w3types.RPCCaller, len(oracles))
+	for i, addr := range oracles {
+		calls[i] = eth.CallFunc(addr, OraclePriceFunc).Returns(prices[i])
+	}
+
+	if err := e.ClientHttp.CallCtx(ctx, calls...); err != nil {
+		return err
+	}
+	// 3. Batch call — 1 seul RPC
+	e.OracleCache.Mu.Lock()
+	defer e.OracleCache.Mu.Unlock()
+
+	for i, addr := range oracles {
+		data := &OracleData{
+			Price: prices[i],
+			Ts:    time.Now().Unix(),
+		}
+		e.OracleCache.C[addr] = data
+	}
+	return nil
 }
 
-// filtrer seulement les logs qui concernent //nos positions 
+// filtrer seulement les logs qui concernent //nos positions
 func (e *Scanner) WatchPositions(ctx context.Context) {
 
 	query := ethereum.FilterQuery{
@@ -125,7 +153,7 @@ func (e *Scanner) WatchPositions(ctx context.Context) {
 func (e *Scanner) RefreshCache(n int) error {
 
 	for _, ma := range e.Markets {
-		fetched, err := FecthBorrowersFromMarket(ma)
+		fetched, err := FecthBorrowersFromMarket(ma, n)
 		if err != nil {
 			return err
 		}
@@ -155,46 +183,14 @@ func (e *Scanner) ReconnectWs() {
 func (e *Scanner) ProcessLog(log *types.Log) {
 	switch log.Topics[0] {
 	case EventAccrueInterest.Topic0:
-		var (
-			id             [32]byte
-			prevBorrowRate big.Int
-			interest       big.Int
-			feeShares      big.Int
-		)
-		err := EventAccrueInterest.DecodeArgs(log, &id, &prevBorrowRate, &interest, &feeShares)
-		if err != nil {
-			fmt.Println("decode error:", err)
-
-		}
-
-		// vérifie si ce market est dans ton cache
-
-		market, ok := e.PositionCache.m[id]
-		if !ok {
-			// market pas suivi
-		}
-
-		// récupère le prix oracle du market
-		var price big.Int
-		err = e.ClientHttp.Call(
-			eth.CallFunc(market.Oracle, OraclePriceFunc).Returns(&price),
-		)
-		if err != nil {
-			fmt.Println("price error:", err)
-
-		}
-		fmt.Printf("market %x | rate: %s | interest: %s | oracle price: %s\n", id, &prevBorrowRate, &interest, &price)
+		e.PositionCache.AccrueInterestEventProcess(log)
 	case EventBorrow.Topic0:
-		b, _ := log.MarshalJSON()
-		fmt.Println(string(b))
+		e.PositionCache.BorrowEventProcess(log)
 	case EventRepay.Topic0:
-		b, _ := log.MarshalJSON()
-		fmt.Println(string(b))
-	case EventLiquidate.Topic0:
-		b, _ := log.MarshalJSON()
-		fmt.Println(string(b))
-	}
 
+	case EventLiquidate.Topic0:
+		e.PositionCache.LiquidateEventProcess(log)
+	}
 }
 
 // changer cette func pour update la borrowPosition

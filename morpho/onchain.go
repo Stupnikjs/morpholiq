@@ -2,6 +2,8 @@ package morpho
 
 import (
 	"math/big"
+
+	"github.com/Stupnikjs/morpholiq/utils"
 )
 
 type OnChainPosition struct {
@@ -61,7 +63,7 @@ func HealthFactorOraclePrice(oraclePrice, borrowAssets, collateralAssets *big.In
 	// HF = coll * oracle / borrowassets * oracle scale
 	E36 := new(big.Int).Exp(big.NewInt(10), big.NewInt(36), nil)
 	num := new(big.Int).Mul(collateralAssets, oraclePrice) // collateral * oraclePrice
-	num.Mul(num, TenPowInt(6))                             // × 1e6 pour garder la précision
+	num.Mul(num, utils.TenPowInt(6))                       // × 1e6 pour garder la précision
 	denom := new(big.Int).Mul(borrowAssets, E36)           // borrowAssets * 1e36
 	return new(big.Int).Div(num, denom)
 }
@@ -75,7 +77,7 @@ func HealthFactorLLTVScaled(hf, lltv *big.Int) *big.Int {
 	}
 	return new(big.Int).Div(
 		new(big.Int).Mul(hf, lltv),
-		TenPowInt(18),
+		utils.TenPowInt(18),
 	)
 
 }
