@@ -47,15 +47,17 @@ func NewScanner(markets []MorphoMarketParams) *Scanner {
 }
 
 func NewPositionCache(markets []MorphoMarketParams) *PositionCache {
-	bigMap := make(map[[32]byte]*MarketCache, len(markets))
+	bigMap := make(map[[32]byte]*Market, len(markets))
 
 	for _, m := range markets {
 		cache := make(map[common.Address]*BorrowPosition)
-		bigMap[m.ID] = &MarketCache{
-			Mu:     sync.Mutex{},
-			Oracle: m.Oracle,
-			LLTV:   m.LLTV,
-			C:      cache,
+		bigMap[m.ID] = &Market{
+			Mu: sync.Mutex{},
+			MarketCache: MarketCache{
+				Oracle: m.Oracle,
+				C:      cache,
+			},
+			MarketStats: MarketStats{},
 		}
 	}
 	return &PositionCache{
@@ -64,14 +66,14 @@ func NewPositionCache(markets []MorphoMarketParams) *PositionCache {
 }
 
 func (e *Scanner) Scan() error {
-	e.RefreshCache(30)
+	e.ApiRefreshCache(30)
 	go e.WatchPositions(context.Background())
 	go e.WatchOraclePrices(context.Background())
 	go func() {
-		ticker := time.NewTicker(5 * time.Minute)
+		ticker := time.NewTicker(3 * time.Minute)
 		defer ticker.Stop()
 		for range ticker.C {
-			e.RefreshCache(30)
+			e.ApiRefreshCache(30)
 		}
 	}()
 	for {
@@ -151,7 +153,7 @@ func (e *Scanner) WatchPositions(ctx context.Context) {
 	}
 }
 
-func (e *Scanner) RefreshCache(n int) error {
+func (e *Scanner) ApiRefreshCache(n int) error {
 
 	for _, ma := range e.Markets {
 		fetched, err := FecthBorrowersFromMarket(ma, n)
@@ -165,6 +167,81 @@ func (e *Scanner) RefreshCache(n int) error {
 
 	}
 	return nil
+}
+
+// CALL ONCHAIN POUR RECUPERER TOTALBORROWASSETS ET TOTALBORROWSHARES
+
+func (e *Scanner) OnChainRefres() error {
+	ctx := context.Background()
+	var calls []w3types.RPCCaller
+
+	marketMap, marketCalls := e.MarketStatsCalls()
+	oraclePrice, oracleCalls := e.OracleCalls()
+
+	calls = append(calls, marketCalls...)
+	calls = append(calls, oracleCalls...)
+	if err := e.ClientHttp.CallCtx(ctx, calls...); err != nil {
+		return err
+	}
+
+	// update
+	for id, m := range e.PositionCache.m {
+		ms := marketMap[id]
+		m.Mu.Lock()
+		m.MarketStats.TotalBorrowAssets = ms.TotalBorrowAssets
+		m.MarketStats.TotalBorrowShares = ms.TotalBorrowShares
+		m.Mu.Unlock()
+	}
+
+	// unpack oracle
+	for addr, p := range oraclePrice {
+
+		e.OracleCache.Mu.Lock()
+		data := &OracleData{
+			Price: p,
+			Ts:    time.Now().Unix(),
+		}
+		e.OracleCache.C[addr] = data
+		e.OracleCache.Mu.Unlock()
+	}
+	return nil
+}
+
+func (e *Scanner) MarketStatsCalls() (map[[32]byte]*MarketStats, []w3types.RPCCaller) {
+	var calls []w3types.RPCCaller
+
+	marketStates := make(map[[32]byte]*MarketStats, len(e.Markets))
+
+	for id := range e.PositionCache.m {
+		ms := MarketStats{
+			TotalBorrowAssets: new(big.Int),
+			TotalBorrowShares: new(big.Int),
+		}
+
+		marketStates[id] = &ms
+		calls = append(calls, eth.CallFunc(MorphoMain, MarketFunc, id).Returns(
+			new(big.Int), new(big.Int), // supply on s'en fout
+			ms.TotalBorrowAssets, ms.TotalBorrowShares,
+			new(big.Int), new(big.Int),
+		))
+	}
+
+	return marketStates, calls
+}
+
+// RETOURNE LES ORACLE CALLS AVEC LES POINTEURS DE RESULT
+func (e *Scanner) OracleCalls() (map[common.Address]*big.Int, []w3types.RPCCaller) {
+	oraclePrices := make(map[common.Address]*big.Int)
+	var calls []w3types.RPCCaller
+
+	for _, m := range e.PositionCache.m {
+		if _, ok := oraclePrices[m.Oracle]; !ok {
+			price := new(big.Int)
+			oraclePrices[m.Oracle] = price
+			calls = append(calls, eth.CallFunc(m.Oracle, OraclePriceFunc).Returns(price))
+		}
+	}
+	return oraclePrices, calls
 }
 
 func (e *Scanner) ReconnectWs() {

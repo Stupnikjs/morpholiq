@@ -10,7 +10,7 @@ import (
 // Borrow Cache + Oracle Cache
 
 type PositionCache struct {
-	m map[[32]byte]*MarketCache
+	m map[[32]byte]*Market
 }
 
 type OracleCache struct {
@@ -22,12 +22,19 @@ type OracleData struct {
 	Price *big.Int
 	Ts    int64 // Unix timestamp en secondes
 }
+type Market struct {
+	Mu sync.RWMutex
+	MarketCache
+	MarketStats
+}
+
+type MarketStats struct {
+	TotalBorrowAssets, TotalBorrowShares, LLTV *big.Int
+}
 
 type MarketCache struct {
-	Mu                                         sync.Mutex
-	Oracle                                     common.Address
-	TotalBorrowAssets, totalBorrowShares, LLTV *big.Int
-	C                                          map[common.Address]*BorrowPosition
+	Oracle common.Address
+	C      map[common.Address]*BorrowPosition
 }
 
 type BorrowPosition struct {
@@ -48,10 +55,14 @@ func (p *PositionCache) IsMarketInCache(marketID [32]byte) bool {
 	return ok && market != nil
 }
 
-func (pos *BorrowPosition) GetPositionHF(totShares, totBorrowAssets, oraclePrice, LLTV *big.Int) *big.Int {
-	borrowAssets := new(big.Int).Div(
+func (pos *BorrowPosition) GetBorrowAssets(totShares, totBorrowAssets *big.Int) *big.Int {
+	return new(big.Int).Div(
 		new(big.Int).Mul(pos.BorrowShares, totBorrowAssets),
 		totShares)
+}
+
+func (pos *BorrowPosition) GetPositionHF(totShares, totBorrowAssets, oraclePrice, LLTV *big.Int) *big.Int {
+	borrowAssets := pos.GetBorrowAssets(totShares, totBorrowAssets)
 	hf := new(big.Int).Div(
 		new(big.Int).Mul(pos.CollateralAssets, oraclePrice),
 		borrowAssets)

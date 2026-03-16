@@ -40,7 +40,7 @@ type GraphQlResult struct {
 	} `json:"data"`
 }
 
-type Market struct {
+type MarketJson struct {
 	UniqueKey     string `json:"uniqueKey"`
 	LLTV          string `json:"lltv"`
 	IrmAddress    string `json:"irmAddress"`
@@ -59,8 +59,8 @@ type Market struct {
 
 type Response struct {
 	Data struct {
-		Markets struct {
-			Items []Market `json:"items"`
+		MarketsJson struct {
+			Items []MarketJson `json:"items"`
 		} `json:"markets"`
 	} `json:"data"`
 }
@@ -131,7 +131,7 @@ func FecthBorrowersFromMarket(param MorphoMarketParams, n int) ([]BorrowPosition
 
 }
 
-func FetchMarkets() ([]Market, error) {
+func FetchMarkets() ([]MarketJson, error) {
 	query := `{
         markets(
             first: 100
@@ -164,7 +164,7 @@ func FetchMarkets() ([]Market, error) {
 	data, _ := io.ReadAll(resp.Body)
 	var result Response
 	json.Unmarshal(data, &result)
-	return result.Data.Markets.Items, nil
+	return result.Data.MarketsJson.Items, nil
 }
 
 // iterer sur les LLTV pour les plus grosse liquidation

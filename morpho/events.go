@@ -20,13 +20,16 @@ func (c *PositionCache) AccrueInterestEventProcess(log *types.Log) {
 		fmt.Println("decode error:", err)
 
 	}
-
 	// vérifie si ce market est dans ton cache
 
 	if !c.IsMarketInCache(id) {
 		return
 	}
-	fmt.Println("Market in cache")
+	fmt.Println("id: ", id)
+	fmt.Println("prevBorrowRate: ", prevBorrowRate)
+	fmt.Println("inerest: ", interest)
+	fmt.Println("feeshares ", feeShares)
+
 }
 
 func (c *PositionCache) BorrowEventProcess(log *types.Log) {}
@@ -50,7 +53,7 @@ func (c *PositionCache) LiquidateEventProcess(log *types.Log) {
 	}
 	market := c.m[id]
 	market.Mu.Lock()
-
+	// supprime la liquidation du cache
 	market.Mu.Unlock()
 }
 
