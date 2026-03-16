@@ -54,6 +54,7 @@ func NewPositionCache(markets []MorphoMarketParams) *PositionCache {
 		bigMap[m.ID] = &MarketCache{
 			Mu:     sync.Mutex{},
 			Oracle: m.Oracle,
+			LLTV:   m.LLTV,
 			C:      cache,
 		}
 	}

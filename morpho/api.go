@@ -65,7 +65,7 @@ type Response struct {
 	} `json:"data"`
 }
 
-func ApiRespToBorrowPos(result GraphQlResult, n int) []BorrowPosition {
+func ApiRespToBorrowPos(params MorphoMarketParams, result GraphQlResult, n int) []BorrowPosition {
 	items := result.Data.MarketPositions.Items
 	positions := []BorrowPosition{}
 	for _, i := range items {
@@ -73,23 +73,23 @@ func ApiRespToBorrowPos(result GraphQlResult, n int) []BorrowPosition {
 			continue
 		}
 		p := BorrowPosition{
-			Address:             common.HexToAddress(i.User.Address),
-			BorrowAssets:        utils.ParseBigInt(i.State.BorrowAssets.String()),
-			BorrowAssetsUSD:     utils.ParseBigInt(i.State.BorrowAssetsUsd.String()),
-			CollateralAssets:    utils.ParseBigInt(i.State.Collateral.String()),
-			CollateralAssetsUSD: utils.ParseBigInt(i.State.CollateralAssetsUsd.String()),
-			LLTV:                utils.ParseBigInt(i.Market.LLTV.String()),
+			Address:          common.HexToAddress(i.User.Address),
+			BorrowShares:     utils.ParseBigInt(i.State.BorrowShares.String()),
+			CollateralAssets: utils.ParseBigInt(i.State.Collateral.String()),
 		}
-		collUSDScaled := new(big.Int).Mul(p.CollateralAssetsUSD, utils.TenPowInt(36))
-		oraclePrice := new(big.Int).Div(collUSDScaled, p.BorrowAssetsUSD)
-		hf := HealthFactorOraclePrice(oraclePrice, p.BorrowAssets, p.CollateralAssets)
-		p.Hf = hf
-		if hf.Cmp(utils.TenPowInt(6)) < 0 {
-			continue // bad debt
-		}
-		if hf.Cmp(utils.TenPowInt(7)) > 0 {
-			continue // bad debt
-		}
+		collUSDScaled := new(big.Int).Mul(utils.ParseBigInt(i.State.CollateralAssetsUsd.String()), utils.TenPowInt(36))
+		oraclePrice := new(big.Int).Div(collUSDScaled, utils.ParseBigInt(i.State.CollateralAssetsUsd.String()))
+		_ = oraclePrice
+		// calculate HF to filter here
+
+		/*
+			if hf.Cmp(utils.TenPowInt(6)) < 0 {
+				continue // bad debt
+			}
+			if hf.Cmp(utils.TenPowInt(7)) > 0 {
+				continue // bad debt
+			}
+		*/
 		positions = append(positions, p)
 	}
 	return positions
@@ -127,7 +127,7 @@ func FecthBorrowersFromMarket(param MorphoMarketParams, n int) ([]BorrowPosition
 		return nil, err
 	}
 
-	return ApiRespToBorrowPos(result, n), nil
+	return ApiRespToBorrowPos(param, result, n), nil
 
 }
 

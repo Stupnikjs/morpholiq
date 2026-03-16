@@ -24,16 +24,16 @@ type OracleData struct {
 }
 
 type MarketCache struct {
-	Mu                                   sync.Mutex
-	Oracle                               common.Address
-	TotalBorrowAssets, totalBorrowShares *big.Int
-	C                                    map[common.Address]*BorrowPosition
+	Mu                                         sync.Mutex
+	Oracle                                     common.Address
+	TotalBorrowAssets, totalBorrowShares, LLTV *big.Int
+	C                                          map[common.Address]*BorrowPosition
 }
 
 type BorrowPosition struct {
-	MarketID                                                                                     [32]byte
-	Address                                                                                      common.Address
-	BorrowShares, BorrowAssets, BorrowAssetsUSD, CollateralAssets, CollateralAssetsUSD, LLTV, Hf *big.Int
+	MarketID                           [32]byte
+	Address                            common.Address
+	BorrowShares, CollateralAssets, Hf *big.Int
 }
 
 func NewOracleCache(params []MorphoMarketParams) *OracleCache {
@@ -46,4 +46,14 @@ func NewOracleCache(params []MorphoMarketParams) *OracleCache {
 func (p *PositionCache) IsMarketInCache(marketID [32]byte) bool {
 	market, ok := p.m[marketID]
 	return ok && market != nil
+}
+
+func (pos *BorrowPosition) GetPositionHF(totShares, totBorrowAssets, oraclePrice, LLTV *big.Int) *big.Int {
+	borrowAssets := new(big.Int).Div(
+		new(big.Int).Mul(pos.BorrowShares, totBorrowAssets),
+		totShares)
+	hf := new(big.Int).Div(
+		new(big.Int).Mul(pos.CollateralAssets, oraclePrice),
+		borrowAssets)
+	return new(big.Int).Mul(hf, LLTV)
 }
