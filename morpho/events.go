@@ -25,11 +25,13 @@ func (c *PositionCache) AccrueInterestEventProcess(log *types.Log) {
 	if !c.IsMarketInCache(id) {
 		return
 	}
-	fmt.Println("id: ", id)
-	fmt.Println("prevBorrowRate: ", prevBorrowRate)
-	fmt.Println("inerest: ", interest)
-	fmt.Println("feeshares ", feeShares)
+	/*
+		fmt.Println("id: ", id)
+		fmt.Println("prevBorrowRate: ", prevBorrowRate)
+		fmt.Println("inerest: ", interest)
+		fmt.Println("feeshares ", feeShares)
 
+	*/
 }
 
 func (c *PositionCache) BorrowEventProcess(log *types.Log) {}

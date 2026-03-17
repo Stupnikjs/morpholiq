@@ -6,9 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/big"
 	"net/http"
-	"strings"
 
 	"github.com/Stupnikjs/morpholiq/utils"
 	"github.com/ethereum/go-ethereum/common"
@@ -69,7 +67,8 @@ func ApiRespToBorrowPos(params MorphoMarketParams, result GraphQlResult, n int) 
 	items := result.Data.MarketPositions.Items
 	positions := []BorrowPosition{}
 	for _, i := range items {
-		if i.State.BorrowShares == "0" || i.State.BorrowShares == "" {
+
+		if i.State.BorrowShares == "0" || i.State.BorrowShares == "" || i.State.CollateralAssetsUsd == "" || i.State.BorrowAssetsUsd == "" {
 			continue
 		}
 		p := BorrowPosition{
@@ -77,43 +76,22 @@ func ApiRespToBorrowPos(params MorphoMarketParams, result GraphQlResult, n int) 
 			BorrowShares:     utils.ParseBigInt(i.State.BorrowShares.String()),
 			CollateralAssets: utils.ParseBigInt(i.State.Collateral.String()),
 		}
-		collUSDScaled := new(big.Int).Mul(utils.ParseBigInt(i.State.CollateralAssetsUsd.String()), utils.TenPowInt(36))
-		oraclePrice := new(big.Int).Div(collUSDScaled, utils.ParseBigInt(i.State.CollateralAssetsUsd.String()))
-		_ = oraclePrice
-		// calculate HF to filter here
 
-		/*
-			if hf.Cmp(utils.TenPowInt(6)) < 0 {
-				continue // bad debt
-			}
-			if hf.Cmp(utils.TenPowInt(7)) > 0 {
-				continue // bad debt
-			}
-		*/
 		positions = append(positions, p)
 	}
+	fmt.Println(len(positions))
 	return positions
 }
 
 func FecthBorrowersFromMarket(param MorphoMarketParams, n int) ([]BorrowPosition, error) {
 	marketIDstr := "0x" + hex.EncodeToString(param.ID[:])
 
-	query := fmt.Sprintf(`{
-        "query": "{ marketPositions(first: 10000, where: { marketUniqueKey_in: [\"%s\"], chainId_in: [%d] }) 
-		{ items 
-		    { user 
-			     { address } 
-				      state { borrowShares borrowAssets borrowAssetsUsd collateral collateralUsd } 
-					   market { lltv }
-					  } 
-			     } 
-		    }"
-    }`, marketIDstr, uint(param.ChainID))
-
+	query := fmt.Sprintf(`{ marketPositions(first: 1000, where: { marketUniqueKey_in: ["%s"], chainId_in: [%d] }) { items  { user { address }  state { borrowShares borrowAssets borrowAssetsUsd collateral collateralUsd }  market { lltv }} } }`, marketIDstr, uint(param.ChainID))
+	body, _ := json.Marshal(GraphQLRequest{Query: query})
 	resp, err := http.Post(
 		"https://api.morpho.org/graphql",
 		"application/json",
-		strings.NewReader(query),
+		bytes.NewBuffer(body),
 	)
 	if err != nil {
 		return nil, err
@@ -162,6 +140,7 @@ func FetchMarkets() ([]MarketJson, error) {
 	defer resp.Body.Close()
 
 	data, _ := io.ReadAll(resp.Body)
+
 	var result Response
 	json.Unmarshal(data, &result)
 	return result.Data.MarketsJson.Items, nil

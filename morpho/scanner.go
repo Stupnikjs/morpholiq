@@ -52,7 +52,7 @@ func NewPositionCache(markets []MorphoMarketParams) *PositionCache {
 	for _, m := range markets {
 		cache := make(map[common.Address]*BorrowPosition)
 		bigMap[m.ID] = &Market{
-			Mu: sync.Mutex{},
+			Mu: sync.RWMutex{},
 			MarketCache: MarketCache{
 				Oracle: m.Oracle,
 				C:      cache,
@@ -65,10 +65,19 @@ func NewPositionCache(markets []MorphoMarketParams) *PositionCache {
 	}
 }
 
+/*
+
+
+
+
+
+
+
+ */
+
 func (e *Scanner) Scan() error {
 	e.ApiRefreshCache(30)
 	go e.WatchPositions(context.Background())
-	go e.WatchOraclePrices(context.Background())
 	go func() {
 		ticker := time.NewTicker(3 * time.Minute)
 		defer ticker.Stop()
@@ -76,58 +85,29 @@ func (e *Scanner) Scan() error {
 			e.ApiRefreshCache(30)
 		}
 	}()
+	go func() {
+		ticker := time.NewTicker(4 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			e.OnChainRefresh()
+		}
+	}()
+
+	e.OnChainRefresh()
+	// e.UpdateHF()
 	for {
 		time.Sleep(1 * time.Second)
 
 		// listen changement de prix Oracle ou Event position
-
 		log := <-e.positionCh
 		e.ProcessLog(log)
 
 	}
 }
 
-func (e *Scanner) WatchOraclePrices(ctx context.Context) error {
-	seen := make(map[common.Address]struct{})
-	var oracles []common.Address
-	for _, m := range e.Markets {
-		if _, ok := seen[m.Oracle]; !ok {
-			seen[m.Oracle] = struct{}{}
-			oracles = append(oracles, m.Oracle)
-		}
-	}
-
-	prices := make([]*big.Int, len(oracles))
-	for i := range prices {
-		prices[i] = new(big.Int)
-	}
-
-	// w3 batch : tous les calls partent en une seule requête JSON-RPC
-	calls := make([]w3types.RPCCaller, len(oracles))
-	for i, addr := range oracles {
-		calls[i] = eth.CallFunc(addr, OraclePriceFunc).Returns(prices[i])
-	}
-
-	if err := e.ClientHttp.CallCtx(ctx, calls...); err != nil {
-		return err
-	}
-	// 3. Batch call — 1 seul RPC
-	e.OracleCache.Mu.Lock()
-	defer e.OracleCache.Mu.Unlock()
-
-	for i, addr := range oracles {
-		data := &OracleData{
-			Price: prices[i],
-			Ts:    time.Now().Unix(),
-		}
-		e.OracleCache.C[addr] = data
-	}
-	return nil
-}
-
 // filtrer seulement les logs qui concernent //nos positions
 func (e *Scanner) WatchPositions(ctx context.Context) {
-
+	fmt.Println("Watching Positions .. ")
 	query := ethereum.FilterQuery{
 		Addresses: []common.Address{MorphoMain},
 		Topics: [][]common.Hash{{
@@ -169,9 +149,8 @@ func (e *Scanner) ApiRefreshCache(n int) error {
 	return nil
 }
 
-// CALL ONCHAIN POUR RECUPERER TOTALBORROWASSETS ET TOTALBORROWSHARES
+func (e *Scanner) OnChainRefresh() error {
 
-func (e *Scanner) OnChainRefres() error {
 	ctx := context.Background()
 	var calls []w3types.RPCCaller
 
@@ -269,4 +248,8 @@ func (e *Scanner) ProcessLog(log *types.Log) {
 	case EventLiquidate.Topic0:
 		e.PositionCache.LiquidateEventProcess(log)
 	}
+}
+
+func (e *Scanner) UpdateHF() {
+	// loop over markets to update hf
 }

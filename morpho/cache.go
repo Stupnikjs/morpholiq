@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"sync"
 
+	"github.com/Stupnikjs/morpholiq/utils"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -61,10 +62,15 @@ func (pos *BorrowPosition) GetBorrowAssets(totShares, totBorrowAssets *big.Int) 
 		totShares)
 }
 
-func (pos *BorrowPosition) GetPositionHF(totShares, totBorrowAssets, oraclePrice, LLTV *big.Int) *big.Int {
+// prec 1e18
+func (pos *BorrowPosition) HF(totShares, totBorrowAssets, oraclePrice, LLTV *big.Int) *big.Int {
 	borrowAssets := pos.GetBorrowAssets(totShares, totBorrowAssets)
 	hf := new(big.Int).Div(
 		new(big.Int).Mul(pos.CollateralAssets, oraclePrice),
 		borrowAssets)
-	return new(big.Int).Mul(hf, LLTV)
+
+	return new(big.Int).Div(
+		new(big.Int).Mul(hf, LLTV),
+		utils.TenPowInt(36),
+	)
 }
