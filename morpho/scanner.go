@@ -253,3 +253,5 @@ func (e *Scanner) ProcessLog(log *types.Log) {
 func (e *Scanner) UpdateHF() {
 	// loop over markets to update hf
 }
+
+// load Markets
