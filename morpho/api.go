@@ -15,7 +15,33 @@ import (
 type GraphQLRequest struct {
 	Query string `json:"query"`
 }
-
+type NewGraphQlResult struct {
+	Data struct {
+		MarketPositions struct {
+			Items []struct {
+				User struct {
+					Address string `json:"address"`
+				} `json:"user"`
+				State struct {
+					BorrowShares        json.Number `json:"borrowShares"`
+					BorrowAssets        json.Number `json:"borrowAssets"`
+					BorrowAssetsUsd     json.Number `json:"borrowAssetsUsd"`
+					Collateral          json.Number `json:"collateral"`
+					CollateralAssetsUsd json.Number `json:"collateralUsd"`
+				} `json:"state"`
+				Market struct {
+					LLTV json.Number `json:"lltv"`
+				} `json:"market"`
+			} `json:"items"`
+			PageInfo struct {
+				CountTotal int `json:"countTotal"`
+				Count      int `json:"count"`
+				Limit      int `json:"limit"`
+				Skip       int `json:"skip"`
+			} `json:"pageInfo"`
+		} `json:"marketPositions"`
+	} `json:"data"`
+}
 type GraphQlResult struct {
 	Data struct {
 		MarketPositions struct {
@@ -32,13 +58,13 @@ type GraphQlResult struct {
 				} `json:"state"`
 				Market struct {
 					LLTV json.Number `json:"lltv"`
-				}
+				} `json:"market"`
 			} `json:"items"`
 		} `json:"marketPositions"`
 	} `json:"data"`
 }
 
-type MarketJson struct {
+type Markets struct {
 	UniqueKey     string `json:"uniqueKey"`
 	LLTV          string `json:"lltv"`
 	IrmAddress    string `json:"irmAddress"`
@@ -57,20 +83,17 @@ type MarketJson struct {
 
 type Response struct {
 	Data struct {
-		MarketsJson struct {
-			Items []MarketJson `json:"items"`
+		Markets struct {
+			Items []Markets `json:"items"`
 		} `json:"markets"`
 	} `json:"data"`
 }
 
-func ApiRespToBorrowPos(params MorphoMarketParams, result GraphQlResult, n int) []BorrowPosition {
+func ApiRespToBorrowPos(params MorphoMarketParams, result NewGraphQlResult) []BorrowPosition {
 	items := result.Data.MarketPositions.Items
 	positions := []BorrowPosition{}
 	for _, i := range items {
 
-		if i.State.BorrowShares == "0" || i.State.BorrowShares == "" || i.State.CollateralAssetsUsd == "" || i.State.BorrowAssetsUsd == "" {
-			continue
-		}
 		p := BorrowPosition{
 			Address:          common.HexToAddress(i.User.Address),
 			BorrowShares:     utils.ParseBigInt(i.State.BorrowShares.String()),
@@ -99,51 +122,69 @@ func FecthBorrowersFromMarket(param MorphoMarketParams, n int) ([]BorrowPosition
 
 	defer resp.Body.Close()
 
-	var result GraphQlResult
+	var result NewGraphQlResult
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err
 	}
 
-	return ApiRespToBorrowPos(param, result, n), nil
+	return ApiRespToBorrowPos(param, result), nil
 
 }
 
-func FetchMarkets() ([]MarketJson, error) {
-	query := `{
-        markets(
-            first: 100
-            orderBy: SupplyAssetsUsd
-            orderDirection: Desc
-            where: { chainId_in: [8453] }
-        ) {
-            items {
-                uniqueKey
-                lltv
-                irmAddress
-                oracleAddress
-                loanAsset { address symbol decimals }
-                collateralAsset { address symbol decimals }
+func NewFecthBorrowersFromMarket(param MorphoMarketParams) ([]BorrowPosition, error) {
+	marketIDstr := "0x" + hex.EncodeToString(param.ID[:])
+	allPositions := []BorrowPosition{}
+	skip := 0
+	limit := 500
+
+	for {
+		query := fmt.Sprintf(`{
+            marketPositions(
+                first: %d
+                skip: %d
+                where: {
+                    marketUniqueKey_in: ["%s"]
+                    chainId_in: [%d]
+                }
+            ) {
+                items {
+                    user { address }
+                    state { borrowShares borrowAssets borrowAssetsUsd collateral collateralUsd }
+                    market { lltv }
+                }
+                pageInfo { countTotal count limit skip }
             }
-        }
-    }`
+        }`, limit, skip, marketIDstr, uint(param.ChainID))
 
-	body, _ := json.Marshal(GraphQLRequest{Query: query})
-	resp, err := http.Post(
-		"https://api.morpho.org/graphql",
-		"application/json",
-		bytes.NewBuffer(body),
-	)
-	if err != nil {
-		return nil, err
+		body, _ := json.Marshal(GraphQLRequest{Query: query})
+		resp, err := http.Post(
+			"https://api.morpho.org/graphql",
+			"application/json",
+			bytes.NewBuffer(body),
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		data, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		var result NewGraphQlResult
+		if err := json.Unmarshal(data, &result); err != nil {
+			return nil, err
+		}
+
+		allPositions = append(allPositions, ApiRespToBorrowPos(param, result)...)
+
+		pageInfo := result.Data.MarketPositions.PageInfo
+		fmt.Printf("skip: %d count: %d countTotal: %d\n", skip, pageInfo.Count, pageInfo.CountTotal)
+
+		if skip+limit >= pageInfo.CountTotal {
+			break
+		}
+		skip += limit
 	}
-	defer resp.Body.Close()
-
-	data, _ := io.ReadAll(resp.Body)
-
-	var result Response
-	json.Unmarshal(data, &result)
-	return result.Data.MarketsJson.Items, nil
+	fmt.Println("final count: ", len(allPositions))
+	return allPositions, nil
 }
-
-// iterer sur les LLTV pour les plus grosse liquidation

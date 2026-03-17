@@ -3,6 +3,7 @@ package morpho
 import (
 	"math/big"
 
+	"github.com/Stupnikjs/morpholiq/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/lmittmann/w3"
 )
@@ -31,12 +32,10 @@ var (
 			LoanToken:       common.HexToAddress("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"), // USDC
 			CollateralToken: common.HexToAddress("0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf"), // cbBTC
 			Oracle:          common.HexToAddress("0x663BECd10daE6C4A3Dcd89F1d76c1174199639B9"),
-			IRM:             common.HexToAddress("0x46415998764C29aB2a25CbeA6254146D50D22687"), // AdaptiveCurveIRM
 			LLTV: big.NewInt(0).SetBytes(common.HexToHash(
 				"0x00000000000000000000000000000000000000000000000bee15e785b06c0000").Bytes()),
 			// 860000000000000000 = 86%
-			LoanTokenDecimals:       6,
-			CollateralTokenDecimals: 8,
+
 		},
 
 		// ─────────────────────────────────────────────────────────────
@@ -50,12 +49,10 @@ var (
 			LoanToken:       common.HexToAddress("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"), // USDC
 			CollateralToken: common.HexToAddress("0x4200000000000000000000000000000000000006"), // WETH
 			Oracle:          common.HexToAddress("0x4E08B779fD4AB374bCe9D36aE88c3Dbc36dCb48A"),
-			IRM:             common.HexToAddress("0x46415998764C29aB2a25CbeA6254146D50D22687"), // AdaptiveCurveIRM
+
 			LLTV: big.NewInt(0).SetBytes(common.HexToHash(
 				"0x00000000000000000000000000000000000000000000000bee15e785b06c0000").Bytes()),
 			// 860000000000000000 = 86%
-			LoanTokenDecimals:       6,
-			CollateralTokenDecimals: 18,
 		},
 
 		// ─────────────────────────────────────────────────────────────
@@ -69,11 +66,90 @@ var (
 			LoanToken:       common.HexToAddress("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"), // USDC
 			CollateralToken: common.HexToAddress("0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf"), // cbBTC
 			Oracle:          common.HexToAddress("0x663BECd10daE6C4A3Dcd89F1d76c1174199639B9"),
-			IRM:             common.HexToAddress("0x46415998764C29aB2a25CbeA6254146D50D22687"), // AdaptiveCurveIRM
+
 			LLTV: big.NewInt(0).SetBytes(common.HexToHash(
 				"0x00000000000000000000000000000000000000000000000caa35e978b9c40000").Bytes()),
 			// 915000000000000000 = 91.5%
+
+		},
+	}
+
+	MainnetParams = []MorphoMarketParams{
+		// wstETH / WETH — 96.5% LLTV
+		{
+			ID:                      [32]byte(common.HexToHash("0xb8fc70e82bc5bb53e773626fcc6a23f7eefa036918d7ef216ecfb1950a94a85e")),
+			ChainID:                 1,
+			LoanToken:               common.HexToAddress("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"), // WETH
+			CollateralToken:         common.HexToAddress("0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0"), // wstETH
+			Oracle:                  common.HexToAddress("0xbD60A6770b27E084E8617335ddE769241B0e71D8"),
+			LLTV:                    utils.ParseBigInt("965000000000000000"),
+			LoanTokenDecimals:       18,
+			CollateralTokenDecimals: 18,
+		},
+		// cbBTC / USDC — 86% LLTV
+		{
+			ID:                      [32]byte(common.HexToHash("0x64d65c9a2d91c36d56fbc42d69e979335320169b3df63bf92789e2c8883fcc64")),
+			ChainID:                 1,
+			LoanToken:               common.HexToAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"), // USDC
+			CollateralToken:         common.HexToAddress("0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf"), // cbBTC
+			Oracle:                  common.HexToAddress("0xA6D6950c9F177F1De7f7757FB33539e3Ec60182a"),
+			LLTV:                    utils.ParseBigInt("860000000000000000"),
 			LoanTokenDecimals:       6,
+			CollateralTokenDecimals: 8,
+		},
+		// WBTC / USDC — 86% LLTV
+		{
+			ID:                      [32]byte(common.HexToHash("0x3a85e619751152991742810df6ec69ce473daef99e28a64ab2340d7b7ccfee49")),
+			ChainID:                 1,
+			LoanToken:               common.HexToAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"), // USDC
+			CollateralToken:         common.HexToAddress("0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599"), // WBTC
+			Oracle:                  common.HexToAddress("0xDddd770BADd886dF3864029e4B377B5F6a2B6b83"),
+			LLTV:                    utils.ParseBigInt("860000000000000000"),
+			LoanTokenDecimals:       6,
+			CollateralTokenDecimals: 8,
+		},
+		// WBTC / USDT — 86% LLTV
+		{
+			ID:                      [32]byte(common.HexToHash("0xa921ef34e2fc7a27ccc50ae7e4b154e16c9799d3387076c421423ef52ac4df99")),
+			ChainID:                 1,
+			LoanToken:               common.HexToAddress("0xdAC17F958D2ee523a2206206994597C13D831ec7"), // USDT
+			CollateralToken:         common.HexToAddress("0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599"), // WBTC
+			Oracle:                  common.HexToAddress("0x008bF4B1cDA0cc9f0e882E0697f036667652E1ef"),
+			LLTV:                    utils.ParseBigInt("860000000000000000"),
+			LoanTokenDecimals:       6,
+			CollateralTokenDecimals: 8,
+		},
+		// wstETH / USDT — 86% LLTV
+		{
+			ID:                      [32]byte(common.HexToHash("0xe7e9694b754c4d4f7e21faf7223f6fa71abaeb10296a4c43a54a7977149687d2")),
+			ChainID:                 1,
+			LoanToken:               common.HexToAddress("0xdAC17F958D2ee523a2206206994597C13D831ec7"), // USDT
+			CollateralToken:         common.HexToAddress("0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0"), // wstETH
+			Oracle:                  common.HexToAddress("0x95DB30fAb9A3754e42423000DF27732CB2396992"),
+			LLTV:                    utils.ParseBigInt("860000000000000000"),
+			LoanTokenDecimals:       6,
+			CollateralTokenDecimals: 18,
+		},
+		// weETH / WETH — 94.5% LLTV
+		{
+			ID:                      [32]byte(common.HexToHash("0x37e7484d642d90f14451f1910ba4b7b8e4c3ccdd0ec28f8b2bdb35479e472ba7")),
+			ChainID:                 1,
+			LoanToken:               common.HexToAddress("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"), // WETH
+			CollateralToken:         common.HexToAddress("0xCd5fE23C85820F7B72D0926FC9b05b43E359b7ee"), // weETH
+			Oracle:                  common.HexToAddress("0xbDd2F2D473E8D63d1BFb0185B5bDB8046ca48a72"),
+			LLTV:                    utils.ParseBigInt("945000000000000000"),
+			LoanTokenDecimals:       18,
+			CollateralTokenDecimals: 18,
+		},
+		// LBTC / WBTC — 94.5% LLTV
+		{
+			ID:                      [32]byte(common.HexToHash("0xf6a056627a51e511ec7f48332421432ea6971fc148d8f3c451e14ea108026549")),
+			ChainID:                 1,
+			LoanToken:               common.HexToAddress("0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599"), // WBTC
+			CollateralToken:         common.HexToAddress("0x8236a87084f8B84306f72007F36F2618A5634494"), // LBTC
+			Oracle:                  common.HexToAddress("0xa98105B8227E0f2157816Feb7A331364A9B74F80"),
+			LLTV:                    utils.ParseBigInt("945000000000000000"),
+			LoanTokenDecimals:       8,
 			CollateralTokenDecimals: 8,
 		},
 	}

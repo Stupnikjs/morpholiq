@@ -136,7 +136,7 @@ func (e *Scanner) WatchPositions(ctx context.Context) {
 func (e *Scanner) ApiRefreshCache(n int) error {
 
 	for _, ma := range e.Markets {
-		fetched, err := FecthBorrowersFromMarket(ma, n)
+		fetched, err := NewFecthBorrowersFromMarket(ma)
 		if err != nil {
 			return err
 		}

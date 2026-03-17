@@ -8,21 +8,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// Borrow Cache + Oracle Cache
-
 type PositionCache struct {
 	m map[[32]byte]*Market
 }
 
-type OracleCache struct {
-	Mu sync.Mutex
-	C  map[common.Address]*OracleData
-}
-
-type OracleData struct {
-	Price *big.Int
-	Ts    int64 // Unix timestamp en secondes
-}
 type Market struct {
 	Mu sync.RWMutex
 	MarketCache
@@ -42,6 +31,21 @@ type BorrowPosition struct {
 	MarketID                           [32]byte
 	Address                            common.Address
 	BorrowShares, CollateralAssets, Hf *big.Int
+}
+
+/*
+   ______________________________________________________________________________________
+
+*/
+
+type OracleCache struct {
+	Mu sync.Mutex
+	C  map[common.Address]*OracleData
+}
+
+type OracleData struct {
+	Price *big.Int
+	Ts    int64 // Unix timestamp en secondes
 }
 
 func NewOracleCache(params []MorphoMarketParams) *OracleCache {
