@@ -82,9 +82,8 @@ func (e *Scanner) Scan() error {
 				fmt.Println(err)
 			}
 			// decortiquer ces positions
-			liq := cache.LiquidationPotential(10)
-			fmt.Println(liq)
-
+			liq := cache.LiquidationPotential(6)
+			fmt.Println(len(liq))
 		}
 	}()
 

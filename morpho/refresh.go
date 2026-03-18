@@ -38,7 +38,7 @@ func (c *Cache) OnChainRefresh(client *w3.Client) error {
 	calls = append(calls, marketCalls...)
 	calls = append(calls, oracleCalls...)
 
-	for _, call := range append(marketCalls, oracleCalls...) {
+	for _, call := range calls {
 		if err := client.CallCtx(ctx, call); err != nil {
 			return err
 		}
