@@ -78,3 +78,7 @@ func (pos *BorrowPosition) HF(totShares, totBorrowAssets, oraclePrice, LLTV *big
 		utils.TenPowInt(36),
 	)
 }
+
+
+// Percent to liquidation 
+// Évolution of collatéral needed for liquidation
