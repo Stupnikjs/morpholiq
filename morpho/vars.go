@@ -10,6 +10,8 @@ import (
 
 var (
 	DRPC         = "https://lb.drpc.live/ethereum/AhuxMhCqfkI8pF_0y4Fpi89GWcIMFIwR8ZsatuZZzRRv"
+	DWS          = "wss://lb.drpc.live/ethereum/AhuxMhCqfkI8pF_0y4Fpi89GWcIMFIwR8ZsatuZZzRRv"
+	INFURAMAIN   = "https://mainnet.infura.io/v3/e587127983764e6284261ebf6b4aaedf"
 	BASEDRPC     = "https://lb.drpc.live/base/AhuxMhCqfkI8pF_0y4Fpi89GWcIMFIwR8ZsatuZZzRRv"
 	BASEDRPCWS   = "wss://lb.drpc.live/base/AhuxMhCqfkI8pF_0y4Fpi89GWcIMFIwR8ZsatuZZzRRv"
 	PubRPC       = "https://ethereum-rpc.publicnode.com"

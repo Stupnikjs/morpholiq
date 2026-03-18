@@ -93,8 +93,8 @@ func ApiRespToBorrowPos(params MorphoMarketParams, result NewGraphQlResult) []Bo
 	items := result.Data.MarketPositions.Items
 	positions := []BorrowPosition{}
 	for _, i := range items {
-
 		p := BorrowPosition{
+			MarketID:         [32]byte(params.ID),
 			Address:          common.HexToAddress(i.User.Address),
 			BorrowShares:     utils.ParseBigInt(i.State.BorrowShares.String()),
 			CollateralAssets: utils.ParseBigInt(i.State.Collateral.String()),
@@ -102,7 +102,6 @@ func ApiRespToBorrowPos(params MorphoMarketParams, result NewGraphQlResult) []Bo
 
 		positions = append(positions, p)
 	}
-	fmt.Println(len(positions))
 	return positions
 }
 
@@ -178,13 +177,12 @@ func NewFecthBorrowersFromMarket(param MorphoMarketParams) ([]BorrowPosition, er
 		allPositions = append(allPositions, ApiRespToBorrowPos(param, result)...)
 
 		pageInfo := result.Data.MarketPositions.PageInfo
-		fmt.Printf("skip: %d count: %d countTotal: %d\n", skip, pageInfo.Count, pageInfo.CountTotal)
 
 		if skip+limit >= pageInfo.CountTotal {
 			break
 		}
 		skip += limit
 	}
-	fmt.Println("final count: ", len(allPositions))
+
 	return allPositions, nil
 }

@@ -1,15 +1,12 @@
 package main
 
-import (
-	"github.com/Stupnikjs/morpholiq/morpho"
-)
+import "github.com/Stupnikjs/morpholiq/morpho"
 
 func main() {
 	// Connexion au noeud Ethereum (remplace par ton RPC)
+	scanner := morpho.NewScanner(morpho.DRPC, morpho.DWS)
 
-	scanner := morpho.NewScanner(morpho.MainnetParams)
 	scanner.Scan()
-
 }
 
 /*
