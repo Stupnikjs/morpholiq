@@ -12,6 +12,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+// Build Liquidation Fetcher pour forker et tester le smart contract de liquidation sur le fork
+
 const (
 	morphoGraphQLURL = "https://api.morpho.org/graphql"
 	defaultPageLimit = 500
